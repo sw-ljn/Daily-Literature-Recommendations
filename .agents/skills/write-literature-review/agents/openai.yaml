@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write Literature Review"
+  short_description: "Search, map, and draft scholarly reviews"
+  default_prompt: "Use $write-literature-review to search papers and draft a publishable literature review on my topic."

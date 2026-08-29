@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "skills": {
+    "write-literature-review": {
+      "source": "https://github.com/Zsun79/LitReviewSkill",
+      "path": "skills/write-literature-review",
+      "ref": "main",
+      "commit": "a53cd419352e4dd05958f67340fde3642d84abc3"
+    },
+    "paper-search": {
+      "source": "paper-search-cli",
+      "package_version": "0.3.4",
+      "bundled_path": "node_modules/paper-search-cli/skills/paper-search"
+    },
+    "daily-literature-recommendations": {
+      "source": "project-local",
+      "version": "1.0.0"
+    }
+  }
+}

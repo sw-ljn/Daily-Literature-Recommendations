@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Literature Recommendations"
+  short_description: "Search, screen, and email daily papers"
+  default_prompt: "Use $daily-literature-recommendations to run a configured literature recommendation task and deliver the results by Gmail."

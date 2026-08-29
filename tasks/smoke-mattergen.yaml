@@ -1,0 +1,61 @@
+# 完整端到端测试配置：规模小、存在已知论文和开放 PDF，适合验证
+# 检索、引文扩展、筛选、阅读、Gmail、标签及历史幂等。
+task_id: smoke1-mattergen
+display_name: MatterGen 文献推荐流程测试
+timezone: America/Los_Angeles
+
+scope:
+  domain: materials science and machine learning
+  research_question: MatterGen及其后续研究如何支持或质疑生成式无机材料设计？
+  target_relationship: 论文必须直接研究MatterGen，或对其生成材料的新颖性、稳定性、训练数据和实验验证进行独立评估
+  include:
+    - MatterGen原始论文
+    - MatterGen后续独立评估或批评
+    - 直接比较MatterGen与其他晶体生成模型
+  exclude:
+    - 仅泛泛讨论生成式AI
+    - 不涉及无机晶体或材料生成
+    - 新闻稿和无技术内容网页
+
+search:
+  keywords:
+    - MatterGen inorganic materials design
+    - MatterGen evaluation novelty stability
+  sources:
+    - crossref
+    - openalex
+    - semantic
+    - arxiv
+    - core
+    - openaire
+    - scopus
+    - sciencedirect
+    - googlescholar
+    - openreview
+  date_window_days: 1500
+  max_queries: 2
+  search_limit: 12
+  citation_expansion:
+    enabled: true
+    rounds: 1
+    frontier_limit: 2
+    references_per_seed: 2
+    citations_per_seed: 2
+
+screening:
+  read_limit: 3
+  recommend_limit: 2
+  min_score: 50
+  allowed_reading_depth:
+    - full_text
+    - substantial_excerpt
+    - abstract_only
+  allow_preprints: true
+  allow_updates: false
+
+delivery:
+  recipient: me
+  gmail_label: Literature recommendations from codex
+  subject_prefix: 文献推荐流程测试
+  signature: Codex
+  language: zh-CN

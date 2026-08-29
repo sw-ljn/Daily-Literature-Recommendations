@@ -1,0 +1,23 @@
+{
+  "name": "daily-literature-recommendations",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Project-local Codex skills and runtime for scheduled literature recommendations.",
+  "scripts": {
+    "postinstall": "node scripts/patch-paper-search.mjs",
+    "patch:paper-search": "node scripts/patch-paper-search.mjs",
+    "cleanup:task": "python scripts/cleanup-task-data.py",
+    "migrate:task": "python scripts/migrate-task-data.py",
+    "failure:preflight": "python scripts/write-preflight-failure.py",
+    "paper-search": "paper-search",
+    "doctor": "paper-search doctor --pretty",
+    "smoke:mock": "paper-search smoke --mock --pretty",
+    "smoke:live": "paper-search smoke --live --pretty",
+    "test": "node scripts/patch-paper-search.mjs && node --test tests/paper-search-patches.test.mjs && python tests/test_history.py && python tests/test_cleanup_task_data.py && python tests/test_preflight_failure.py && npm run smoke:mock"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "dependencies": {
+    "paper-search-cli": "0.3.4"
+  }
+}

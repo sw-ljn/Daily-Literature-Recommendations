@@ -1,0 +1,31 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Local credentials and OAuth material must never be committed.
+credentials*.json
+client_secret*.json
+token*.json
+*.pem
+*.key
+*.p12
+/.secrets/
+/secrets/
+
+# Generated task data stays local.
+data/
+
+# Task definitions are private by default; publish only the template and smoke task.
+/tasks/*.yaml
+/tasks/*.yml
+!/tasks/_template.yaml
+!/tasks/smoke-mattergen.yaml
+
+# Generated diagnostics and temporary artifacts stay local.
+/doctor-*.json
+/tmp/
+
+# Python and tool caches.
+__pycache__/
+*.pyc

@@ -1,0 +1,124 @@
+# 每日文献推荐任务的完整生产配置模板。
+# 复制本文件并重命名为 tasks/<task-id>.yaml 后再填写。
+# 必填项：task_id、display_name、scope.research_question、
+# scope.target_relationship、search.keywords。其他字段均可使用默认值，
+# 但完整写出有助于定时任务保持可复现、可审计。
+
+# 任务的稳定唯一标识；只使用小写字母、数字和连字符。
+# 它同时用于运行目录、推荐历史分组和 run_key 命名空间，启用后不要随意改名。
+task_id: replace-with-stable-task-id
+
+# 邮件和运行报告中显示的人类可读任务名称。
+display_name: 请填写文献推荐主题
+
+# 计算每次调用的本地时间戳、邮件主题时间和 run_key 时使用的 IANA 时区。
+timezone: America/Los_Angeles
+
+# 定义什么文献与任务相关；这里控制筛选判断，而不仅是关键词匹配。
+scope:
+  # 学术领域，用于选择默认数据库、术语和评价方式。
+  domain: 请填写研究领域
+
+  # 每次运行持续回答的核心研究问题；必须是明确问题而非宽泛主题。
+  research_question: 请填写本任务希望持续回答的研究问题
+
+  # 文献必须与研究问题建立的关系；用于区分“提到关键词”和“真正相关”。
+  target_relationship: 请说明论文必须与研究问题建立什么关系
+
+  # 满足任一或组合条件时可纳入；建议写方法、对象、数据或验证要求。
+  include:
+    - 请填写纳入条件
+
+  # 命中这些条件时排除；用于过滤相邻但无关主题、新闻稿或低质量来源。
+  exclude:
+    - 请填写排除条件
+
+# 控制候选文献如何被发现以及检索规模。
+search:
+  # 初始英文检索短语；每项应简短、低冗余，并覆盖同义词或方法名称。
+  keywords:
+    - replace with concise English search phrase
+
+  # 本任务允许使用的检索来源。只配置确实需要且当前可用的来源。
+  # 常用值包括 crossref、openalex、semantic、arxiv、pubmed、core、
+  # openaire、googlescholar、openreview、scopus、sciencedirect。
+  # Wiley TDM 仅支持按 DOI 下载，不是搜索源。
+  sources:
+    - crossref
+    - openalex
+    - semantic
+    - arxiv
+    - googlescholar
+    - openreview
+
+  # 相对运行日期向前检索的天数；例如 30 表示最近 30 天。
+  date_window_days: 30
+
+  # Codex 最多生成或执行的查询数；即使 keywords 更多也不得超过此值。
+  max_queries: 10
+
+  # 所有查询和来源合并、去重前后的总体候选预算上限。
+  search_limit: 40
+
+  # 是否从高相关种子论文扩展参考文献和施引文献。
+  citation_expansion:
+    # true 开启引文扩展；false 仅使用关键词检索结果。
+    enabled: true
+
+    # 最多扩展轮数；每日任务通常设为 1，避免候选网络失控。
+    rounds: 1
+
+    # 每轮最多选择多少篇已纳入论文作为引文扩展前沿。
+    frontier_limit: 5
+
+    # 每篇前沿论文最多获取多少篇参考文献。
+    references_per_seed: 5
+
+    # 每篇前沿论文最多获取多少篇施引文献。
+    citations_per_seed: 5
+
+# 控制候选筛选、深读和最终推荐阈值。
+screening:
+  # 最多实际阅读多少篇；可包括全文、主要片段或仅摘要。
+  read_limit: 15
+
+  # 单封邮件最多推荐多少篇；合格论文不足时不得凑数。
+  recommend_limit: 5
+
+  # 进入推荐的最低总分，范围 0–100；默认评分由相关性、创新性、
+  # 证据、来源可靠性和可读证据组成。
+  min_score: 65
+
+  # 允许作为推荐依据的阅读深度。
+  # full_text=已阅读全文；substantial_excerpt=已阅读主要章节/片段；
+  # abstract_only=仅摘要，邮件中必须明确标注。
+  allowed_reading_depth:
+    - full_text
+    - substantial_excerpt
+    - abstract_only
+
+  # 是否允许尚未正式发表的 arXiv、bioRxiv 等预印本进入推荐。
+  allow_preprints: true
+
+  # 是否允许已推荐论文因新版本或正式发表再次推荐。
+  # false 时按 DOI/规范化题名永久排重；true 时仍须证明有实质更新。
+  allow_updates: false
+
+# Gmail 投递行为；发送频率和具体时间不在这里设置，由定时任务负责。
+delivery:
+  # 收件人；me 表示当前已连接的 Gmail 自己，也可填写明确邮箱地址。
+  recipient: me
+
+  # 发送后应用的 Gmail 标签；不存在时由 Gmail skill 创建。
+  gmail_label: Literature recommendations from codex
+
+  # 邮件主题方括号中的前缀，例如 [每日文献推荐]。
+  subject_prefix: 每日文献推荐
+
+  # 邮件结尾署名；默认以 Codex 身份写信，但真实发件地址仍是 Gmail 账号。
+  signature: Codex
+
+  # 邮件正文语言，使用 BCP 47 风格语言标识。
+  language: zh-CN
+
+# 运行数据路径固定为 data/<task_id>/{runs,downloads,state,tmp}，不允许在任务中覆盖。
