@@ -3,7 +3,6 @@
 # 必填项：task_id、display_name、scope.research_question、
 # scope.target_relationship、search.keywords。其他字段均可使用默认值，
 # 但完整写出有助于定时任务保持可复现、可审计。
-# 全文获取来源（包括是否允许 Sci-Hub）等合规策略由使用者自行定义（建议写入触发提示词）；项目本身不做约束。
 
 # 任务的稳定唯一标识；只使用小写字母、数字和连字符。
 # 它同时用于运行目录、推荐历史分组和 run_key 命名空间，启用后不要随意改名。

@@ -106,7 +106,7 @@ If the preflight fails while the project directory is usable, run from the proje
 python scripts/write-preflight-failure.py --task-file tasks/<task>.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<actual-error-code>" --runtime-status ok --gmail-status unavailable
 Confirm the returned run_path is under data/<task_id>/runs/<timestamp>/run.json, then stop.
 
-When the check passes, use the project's daily-literature-recommendations skill to run tasks/<task>.yaml: honor every YAML limit and complete Gmail delivery, exact-label application, read-back verification, and the history update. Download-source policy (e.g. whether Sci-Hub is allowed) is declared by the user in the prompt or task YAML.
+When the check passes, use the project's daily-literature-recommendations skill to run tasks/<task>.yaml: honor every YAML limit and complete Gmail delivery, exact-label application, read-back verification, and the history update. 
 ```
 
 For Claude Code, trigger it from Windows Task Scheduler with `claude -p "<task prompt>"` (complete an interactive `claude` login once first). Codex uses the same prompt in an automation or `codex exec --full-auto`.
@@ -149,7 +149,7 @@ Skill-internal references:
 ## Security and maintenance
 
 - Secrets live only in `.env`, `paper-search` configuration, or environment variables — never in task YAML, skills, run artifacts, or Git history.
-- Download-source policy (including whether Sci-Hub may be used) is the user's decision, declared in the task prompt or task YAML; verify title and identity after every PDF download.
+- Download-source policy is the user's decision, declared in the task prompt or task YAML; verify title and identity after every PDF download.
 - Never describe abstract-only assessment as full-text reading; never fabricate bibliographic data, results, or limitations.
 - Pause the schedule before cleanup, migration, or dependency upgrades; run `npm test` and `npm run doctor` afterward.
 - If docs and the runtime CLI disagree, trust `npx --no-install paper-search --help` and the tests.

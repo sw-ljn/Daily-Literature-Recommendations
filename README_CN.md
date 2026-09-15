@@ -108,7 +108,7 @@ python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py
 项目目录不可用则立即停止并如实说明。预检失败时，在项目根目录执行
 python scripts/write-preflight-failure.py --task-file tasks/<任务>.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<实际错误码>" --runtime-status ok --gmail-status unavailable
 确认返回的 run_path 位于 data/<task_id>/runs/<时间戳>/run.json 后停止。
-预检通过后，用项目的 daily-literature-recommendations 技能执行 tasks/<任务>.yaml，严格遵守全部上限，完成 Gmail 发送、精确标签应用、回读验证和历史更新。全文获取来源约束（如是否允许 Sci-Hub）由使用者在提示词或任务 YAML 中自行声明。
+预检通过后，用项目的 daily-literature-recommendations 技能执行 tasks/<任务>.yaml，严格遵守全部上限，完成 Gmail 发送、精确标签应用、回读验证和历史更新。
 ```
 
 注意：每个任务只在一个调度器注册一条定时项（重复注册会重复发邮件）；Gmail OAuth token 位于 Hermes 数据目录（本机 `%LOCALAPPDATA%\hermes\google_token.json`），`gmail_delivery.py` 自动定位，其他平台无需复制凭据。
