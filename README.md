@@ -42,22 +42,23 @@ When upgrading `paper-search-cli`, review the patch, refresh `.agents/skills/pap
 - an authorized Gmail account: complete the one-time OAuth setup once through the Hermes `google-workspace` skill so the token lands at `$HERMES_HOME/google_token.json`, then confirm it with `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live`;
 - any API keys or institutional access required by the selected literature sources.
 
-Initial setup:
+Initial setup (starting from a fresh clone, bash commands):
 
-```powershell
-Set-Location E:\project-claude\daily-literature-recommendations
-Copy-Item .env.example .env
+```bash
+git clone https://github.com/sw-ljn/Daily-Literature-Recommendations.git
+cd Daily-Literature-Recommendations
+cp .env.example .env   # fill in real keys; .env is ignored by Git
 uv sync
 npm install
 npm run doctor
 npm test
 ```
 
-`uv sync` creates the pinned project venv (`.venv/`, Python 3.10+) from `pyproject.toml` and `uv.lock` — currently `pypdf` for PDF text extraction in step 5 of the workflow; run every Python step through `uv run python ...` so the pinned environment always resolves. `npm install` installs pinned dependencies and reapplies the project-local patch. Put real keys only in `.env`; it is ignored by Git. `.env.example` currently documents the managed SerpApi backend and the arXiv source timeout. Other providers can be enabled through `paper-search` configuration or environment variables.
+`uv sync` creates the pinned project venv (`.venv/`, Python 3.10+) from `pyproject.toml` and `uv.lock` — currently `pypdf` for PDF text extraction in step 5 of the workflow; run every Python step through `uv run python ...` so the pinned environment always resolves. `npm install` installs pinned dependencies and reapplies the project-local patch. `.env.example` currently documents the managed SerpApi backend and the arXiv source timeout. Other providers can be enabled through `paper-search` configuration or environment variables.
 
 You can also run the pinned health checks directly:
 
-```powershell
+```bash
 npx --no-install paper-search doctor --pretty
 npx --no-install paper-search smoke --mock --pretty
 ```
@@ -107,8 +108,8 @@ The four runtime subdirectories are fixed and isolated per `task_id`. Task YAML 
 
 Copy the template to create a new task:
 
-```powershell
-Copy-Item tasks\_template.yaml tasks\solid-electrolyte.yaml
+```bash
+cp tasks/_template.yaml tasks/solid-electrolyte.yaml
 ```
 
 The YAML filename is for human organization only. The `task_id` inside the file is authoritative for data directories, history, and the `run_key` namespace. For example, `tasks/smoke-mattergen.yaml` currently declares `task_id: smoke1-mattergen`.
@@ -329,13 +330,13 @@ Recommendation history is stored at `data/<task_id>/state/recommendations.jsonl`
 
 Example preflight-failure record:
 
-```powershell
-npm run failure:preflight -- `
-  --task-file tasks/smoke-mattergen.yaml `
-  --stage gmail_auth `
-  --reason "Gmail credential preflight failed" `
-  --error-code "FORBIDDEN" `
-  --runtime-status ok `
+```bash
+npm run failure:preflight -- \
+  --task-file tasks/smoke-mattergen.yaml \
+  --stage gmail_auth \
+  --reason "Gmail credential preflight failed" \
+  --error-code "FORBIDDEN" \
+  --runtime-status ok \
   --gmail-status unavailable
 ```
 
@@ -345,8 +346,8 @@ The returned `run_path` is the only allowed location for that failure record.
 
 The cleanup script handles exactly one `data/<task_id>` directory. It defaults to dry-run and never scans other tasks:
 
-```powershell
-$taskId = "smoke1-mattergen"
+```bash
+taskId="smoke1-mattergen"
 
 # Preview file count, directory count, and bytes; change nothing
 npm run cleanup:task -- --task-id $taskId
@@ -357,7 +358,7 @@ npm run cleanup:task -- --task-id $taskId --apply
 
 The task YAML is preserved by default, so a later scheduled trigger recreates empty state and may recommend previously delivered papers again. To retire a task permanently, disable its schedule first and explicitly remove the task config:
 
-```powershell
+```bash
 npm run cleanup:task -- --task-id $taskId --remove-task-config --apply
 ```
 
@@ -367,7 +368,7 @@ Add `--json` for a machine-readable report. The script rejects path separators, 
 
 Older installations used root-level `runs/<task_id>`, `downloads/<task_id>`, shared `state/recommendations.jsonl`, and task-prefixed temporary paths. Only legacy installations need this one-time migration:
 
-```powershell
+```bash
 # Preview
 npm run migrate:task -- --task-id $taskId
 

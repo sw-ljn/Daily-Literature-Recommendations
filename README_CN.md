@@ -11,9 +11,8 @@
 - 所有命令使用项目锁定的本地运行时，不使用用户全局安装的 `paper-search`。
 - 每次运行的项目命令和文件操作都在本机执行，不使用云端 shell。
 - Gmail 只负责读取已授权账号信息、发送邮件、应用 YAML 中配置的精确标签，以及回读验证标签。这四项都通过 `scripts/gmail_delivery.py` 完成，不涉及 Gmail MCP 服务或连接器。
-- 不得使用 Sci-Hub；调用下载回退工具时必须显式设置 `useSciHub=false`。
 - 无法获得全文时必须标记为 `abstract_only` 或 `substantial_excerpt`，不得假装完成全文阅读。
-- API key、cookie、账号信息和其他秘密只能保存在本地 `.env`、`paper-search` 配置或环境变量中，不得写入任务 YAML、Skill、运行日志或 Git 历史。
+- API key、cookie、账号信息和其他秘密只保存在本地 `.env`、`paper-search` 配置或环境变量中，不得写入任务 YAML、Skill、运行日志或 Git 历史。
 
 ## 上游项目与本地编排
 
@@ -35,29 +34,29 @@
 
 ## 环境要求与初始化
 
-- Windows PowerShell；
 - Node.js 18 或更高版本；
 - [uv](https://docs.astral.sh/uv/)（Python 3.10+ 由 `uv sync` 自动装好）；
-- 可触发本项目目录、兼容 Agent Skills 的 agent：Hermes、Codex 或 Claude Code（Claude Code 还需 `npm run sync:skills` 桥接，`npm install` 会自动执行）；
+- 安装可触发本项目的 agent：Hermes、Codex 或 Claude Code（Claude Code 还需 `npm run sync:skills` 桥接，`npm install` 会自动执行）；
 - 已授权的 Gmail 账号：先通过 Hermes 的 `google-workspace` skill 完成一次性 OAuth，使 token 落到 `$HERMES_HOME/google_token.json`，再用 `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live` 验证；
 - 按需配置检索源所需的 API key 或机构访问权限。
 
-首次初始化：
+首次初始化（从克隆仓库开始，全程 bash / git-bash 命令）：
 
-```powershell
-Set-Location E:\project-claude\daily-literature-recommendations
-Copy-Item .env.example .env
+```bash
+git clone https://github.com/sw-ljn/Daily-Literature-Recommendations.git
+cd Daily-Literature-Recommendations
+cp .env.example .env   # 填入真实密钥；.env 已被 Git 忽略
 uv sync
 npm install
 npm run doctor
 npm test
 ```
 
-`uv sync` 依据 `pyproject.toml` 与 `uv.lock` 创建锁定的项目虚拟环境（`.venv/`，Python 3.10+）——当前钉住 `pypdf`，用于工作流第 5 步的 PDF 文本提取；所有 Python 步骤请通过 `uv run python ...` 执行，确保始终命中锁定环境。`npm install` 会安装锁定依赖并自动应用本地补丁。请只在 `.env` 中填写真实密钥；`.env` 已被 Git 忽略。`.env.example` 当前包含 SerpApi 后端和 arXiv 来源超时的示例设置，其他来源可通过 `paper-search` 配置或环境变量启用。
+`uv sync` 依据 `pyproject.toml` 与 `uv.lock` 创建锁定的项目虚拟环境（`.venv/`，Python 3.10+）——当前钉住 `pypdf`，用于工作流第 5 步的 PDF 文本提取；所有 Python 步骤请通过 `uv run python ...` 执行，确保始终命中锁定环境。`npm install` 会安装锁定依赖并自动应用本地补丁。`.env.example` 当前包含 SerpApi 后端和 arXiv 来源超时的示例设置，其他来源可通过 `paper-search` 配置或环境变量启用。
 
 健康检查也可以直接使用固定的项目本地 CLI：
 
-```powershell
+```bash
 npx --no-install paper-search doctor --pretty
 npx --no-install paper-search smoke --mock --pretty
 ```
@@ -105,8 +104,8 @@ daily-literature-recommendations/
 
 复制模板创建新任务：
 
-```powershell
-Copy-Item tasks\_template.yaml tasks\solid-electrolyte.yaml
+```bash
+cp tasks/_template.yaml tasks/solid-electrolyte.yaml
 ```
 
 YAML 文件名只用于人类管理，文件内部的 `task_id` 才是运行目录、历史文件和 `run_key` 的权威标识。例如当前 `tasks/smoke-mattergen.yaml` 的真实 `task_id` 是 `smoke1-mattergen`。
@@ -327,13 +326,13 @@ data/<task_id>/downloads/<YYYY-MM-DDTHH-mm-ss>/
 
 预检失败记录示例：
 
-```powershell
-npm run failure:preflight -- `
-  --task-file tasks/smoke-mattergen.yaml `
-  --stage gmail_auth `
-  --reason "Gmail credential preflight failed" `
-  --error-code "FORBIDDEN" `
-  --runtime-status ok `
+```bash
+npm run failure:preflight -- \
+  --task-file tasks/smoke-mattergen.yaml \
+  --stage gmail_auth \
+  --reason "Gmail credential preflight failed" \
+  --error-code "FORBIDDEN" \
+  --runtime-status ok \
   --gmail-status unavailable
 ```
 
@@ -343,8 +342,8 @@ npm run failure:preflight -- `
 
 清理器只处理一个精确目录 `data/<task_id>`，默认 dry-run，不扫描其他任务：
 
-```powershell
-$taskId = "smoke1-mattergen"
+```bash
+taskId="smoke1-mattergen"
 
 # 预览文件数、目录数和字节数，不修改数据
 npm run cleanup:task -- --task-id $taskId
@@ -355,7 +354,7 @@ npm run cleanup:task -- --task-id $taskId --apply
 
 默认保留 `tasks/*.yaml`，因此下一次计划触发会从空历史重新创建数据并可能重新推荐既有论文。永久退役任务时，应先停用计划任务，再显式删除任务配置：
 
-```powershell
+```bash
 npm run cleanup:task -- --task-id $taskId --remove-task-config --apply
 ```
 
@@ -365,7 +364,7 @@ npm run cleanup:task -- --task-id $taskId --remove-task-config --apply
 
 旧版使用根目录下的 `runs/<task_id>`、`downloads/<task_id>`、共享 `state/recommendations.jsonl` 和任务前缀临时目录。仅旧安装需要执行一次：
 
-```powershell
+```bash
 # 先预览
 npm run migrate:task -- --task-id $taskId
 
