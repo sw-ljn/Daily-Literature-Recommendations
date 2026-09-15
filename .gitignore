@@ -30,6 +30,9 @@ data/
 /doctor-*.json
 /tmp/
 
+# Private notes.
+/IDEA.md
+
 # Python and tool caches.
 __pycache__/
 *.pyc
