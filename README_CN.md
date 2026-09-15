@@ -37,7 +37,7 @@
 
 - Windows PowerShell；
 - Node.js 18 或更高版本；
-- Python 3.10 或更高版本；
+- [uv](https://docs.astral.sh/uv/)（Python 3.10+ 由 `uv sync` 自动装好）；
 - 可触发本项目目录、兼容 Agent Skills 的 agent：Hermes、Codex 或 Claude Code（Claude Code 还需 `npm run sync:skills` 桥接，`npm install` 会自动执行）；
 - 已授权的 Gmail 账号：先通过 Hermes 的 `google-workspace` skill 完成一次性 OAuth，使 token 落到 `$HERMES_HOME/google_token.json`，再用 `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live` 验证；
 - 按需配置检索源所需的 API key 或机构访问权限。
@@ -47,12 +47,13 @@
 ```powershell
 Set-Location E:\project-claude\daily-literature-recommendations
 Copy-Item .env.example .env
+uv sync
 npm install
 npm run doctor
 npm test
 ```
 
-`npm install` 会安装锁定依赖并自动应用本地补丁。请只在 `.env` 中填写真实密钥；`.env` 已被 Git 忽略。`.env.example` 当前包含 SerpApi 后端和 arXiv 来源超时的示例设置，其他来源可通过 `paper-search` 配置或环境变量启用。
+`uv sync` 依据 `pyproject.toml` 与 `uv.lock` 创建锁定的项目虚拟环境（`.venv/`，Python 3.10+）——当前钉住 `pypdf`，用于工作流第 5 步的 PDF 文本提取；所有 Python 步骤请通过 `uv run python ...` 执行，确保始终命中锁定环境。`npm install` 会安装锁定依赖并自动应用本地补丁。请只在 `.env` 中填写真实密钥；`.env` 已被 Git 忽略。`.env.example` 当前包含 SerpApi 后端和 arXiv 来源超时的示例设置，其他来源可通过 `paper-search` 配置或环境变量启用。
 
 健康检查也可以直接使用固定的项目本地 CLI：
 

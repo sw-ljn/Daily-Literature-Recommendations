@@ -36,3 +36,7 @@ data/
 # Python and tool caches.
 __pycache__/
 *.pyc
+.venv/
+
+# uv scratch environments.
+/.uv-cache/

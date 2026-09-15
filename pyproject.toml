@@ -1,0 +1,8 @@
+[project]
+name = "daily-literature-recommendations"
+version = "1.0.0"
+description = "Pinned Python tooling for the literature-recommendation workflow (PDF text extraction and future runtime dependencies)."
+requires-python = ">=3.10"
+dependencies = [
+    "pypdf>=6,<7",
+]

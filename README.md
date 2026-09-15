@@ -37,7 +37,7 @@ When upgrading `paper-search-cli`, review the patch, refresh `.agents/skills/pap
 
 - Windows PowerShell;
 - Node.js 18 or later;
-- Python 3.10 or later;
+- [uv](https://docs.astral.sh/uv/) (Python 3.10+ is provisioned by `uv sync` automatically);
 - an Agent Skills-compatible agent able to trigger this project directory: Hermes, Codex, or Claude Code (Claude Code additionally needs the `npm run sync:skills` bridge, run automatically by `npm install`);
 - an authorized Gmail account: complete the one-time OAuth setup once through the Hermes `google-workspace` skill so the token lands at `$HERMES_HOME/google_token.json`, then confirm it with `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live`;
 - any API keys or institutional access required by the selected literature sources.
@@ -47,12 +47,13 @@ Initial setup:
 ```powershell
 Set-Location E:\project-claude\daily-literature-recommendations
 Copy-Item .env.example .env
+uv sync
 npm install
 npm run doctor
 npm test
 ```
 
-`npm install` installs pinned dependencies and reapplies the project-local patch. Put real keys only in `.env`; it is ignored by Git. `.env.example` currently documents the managed SerpApi backend and the arXiv source timeout. Other providers can be enabled through `paper-search` configuration or environment variables.
+`uv sync` creates the pinned project venv (`.venv/`, Python 3.10+) from `pyproject.toml` and `uv.lock` — currently `pypdf` for PDF text extraction in step 5 of the workflow; run every Python step through `uv run python ...` so the pinned environment always resolves. `npm install` installs pinned dependencies and reapplies the project-local patch. Put real keys only in `.env`; it is ignored by Git. `.env.example` currently documents the managed SerpApi backend and the arXiv source timeout. Other providers can be enabled through `paper-search` configuration or environment variables.
 
 You can also run the pinned health checks directly:
 
