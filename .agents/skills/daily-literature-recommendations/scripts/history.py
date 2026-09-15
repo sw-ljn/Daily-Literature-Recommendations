@@ -113,6 +113,55 @@ def record_delivery(args: argparse.Namespace) -> int:
     return 0
 
 
+def mark_label_status(args: argparse.Namespace) -> int:
+    """Update label_status for one run without touching delivery or resending.
+
+    Retry path from references/contracts.md: after a failed or deferred label
+    write, re-apply the label to the already-sent message and mark the same
+    rows applied. Rows are matched by task_id plus run_key, optionally narrowed
+    to one exact gmail_label value.
+    """
+    history = read_jsonl(args.history)
+    validate_task_ownership(history, args.task_id, args.history)
+    expected_label = (args.gmail_label or "").strip()
+    updated = 0
+    matched = 0
+    for row in history:
+        if row.get("task_id") != args.task_id or row.get("run_key") != args.run_key:
+            continue
+        if row.get("delivery_status") != "delivered":
+            continue
+        if expected_label:
+            if str(row.get("gmail_label") or "").strip() != expected_label:
+                continue
+            if str(row.get("label_status") or "") == args.status:
+                continue
+        matched += 1
+        if row.get("label_status") != args.status:
+            row["label_status"] = args.status
+            updated += 1
+    if matched == 0:
+        raise SystemExit(
+            f"No delivered rows for task_id={args.task_id!r} run_key={args.run_key!r}"
+            + (f" with gmail_label={expected_label!r}" if expected_label else "")
+            + f" in {args.history}"
+        )
+    write_jsonl(args.history, history)
+    print(
+        json.dumps(
+            {
+                "run_key": args.run_key,
+                "matched": matched,
+                "updated": updated,
+                "label_status": args.status,
+                "history": str(args.history),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -134,6 +183,14 @@ def build_parser() -> argparse.ArgumentParser:
     record_parser.add_argument("--label-status", choices=("pending", "applied", "failed"), default="pending")
     record_parser.add_argument("--recommended-at", default="")
     record_parser.set_defaults(func=record_delivery)
+
+    mark_parser = subparsers.add_parser("mark-label-status")
+    mark_parser.add_argument("--history", required=True, type=Path)
+    mark_parser.add_argument("--task-id", required=True)
+    mark_parser.add_argument("--run-key", required=True)
+    mark_parser.add_argument("--gmail-label", default="", help="narrow to this exact label name")
+    mark_parser.add_argument("--status", required=True, choices=("pending", "applied", "failed"))
+    mark_parser.set_defaults(func=mark_label_status)
     return parser
 
 

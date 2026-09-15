@@ -1,6 +1,6 @@
 # Gmail delivery template
 
-Use a natural email voice. The authenticated account is the sender; identify the assistant with the closing signature `Codex`.
+Use a natural email voice. The authenticated account is the sender; the inbox shows `delivery.sender_name` (pass it as `--from`), and the closing signature matches it.
 
 ## Subject
 
@@ -35,7 +35,7 @@ DOI/链接：<canonical link>
 说明：本邮件是有界检索结果，不代表系统综述或穷尽性覆盖。未能访问全文的条目已明确标注，没有按全文阅读处理。
 
 祝好，
-Codex
+daily-lit
 ```
 
 If no paper reaches the threshold or every relevant paper was recommended previously, still send one short zero-result message for this invocation with search counts, scope, main exclusion reasons, and any source/access failures. Do not manufacture recommendations to reach the requested count.

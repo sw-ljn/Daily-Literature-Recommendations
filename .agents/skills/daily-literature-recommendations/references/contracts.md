@@ -77,3 +77,19 @@ Keep the `task_id` field even though the file is task-local, and reject rows bel
 - Gmail send failure: do not append delivered paper history.
 - Gmail send success plus label failure: append history with `delivery_status=delivered` and `label_status=pending`; retry labeling without resending.
 - Every scheduled-task trigger is an independent invocation. Never inspect existing Gmail subjects to suppress it; send a zero-result report when there are no new recommendations.
+
+## Delivery-state transitions
+
+`send → record-delivery (pending) → label → verify-label → mark-label-status (applied)`.
+
+`mark-label-status` is the only command allowed to update an already delivered row,
+and it refuses to run when no delivered row matches the `--task-id`, `--run-key`,
+and `--gmail-label` triple. Use it only after the exact label is verified present
+on the sent message; a failed or skipped verification leaves `pending`.
+
+The retry for a `pending` row addresses the already-sent message by its exact
+recorded `email_subject` (`gmail_delivery.py label --run-json <run.json>` or
+`--subject "<subject>"`), so Gmail message IDs never have to be persisted. A
+retry must not send a second email.
+
+See `references/delivery-cli.md` for commands, exit codes, and troubleshooting.

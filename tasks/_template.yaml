@@ -109,14 +109,17 @@ delivery:
   # 收件人；me 表示当前已连接的 Gmail 自己，也可填写明确邮箱地址。
   recipient: me
 
-  # 发送后应用的 Gmail 标签；不存在时由 Gmail skill 创建。
-  gmail_label: Literature recommendations from codex
+  # 发送后应用的 Gmail 标签；不存在时由投递 CLI 精确创建（不做近似匹配）。
+  gmail_label: Literature recommendations
+
+  # 收件箱里显示的发件人名称；CLI 会把它与已授权地址配对，真实发件地址不变。
+  sender_name: daily-lit
 
   # 邮件主题方括号中的前缀，例如 [每日文献推荐]。
   subject_prefix: 每日文献推荐
 
-  # 邮件结尾署名；默认以 Codex 身份写信，但真实发件地址仍是 Gmail 账号。
-  signature: Codex
+  # 邮件结尾署名。
+  signature: daily-lit
 
   # 邮件正文语言，使用 BCP 47 风格语言标识。
   language: zh-CN

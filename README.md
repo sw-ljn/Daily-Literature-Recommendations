@@ -2,15 +2,15 @@
 
 **English** | [简体中文](README_CN.md)
 
-A bounded literature-recommendation project designed for Codex scheduled tasks. A task YAML defines the research scope; the workflow then performs paper discovery, citation expansion, relevance screening, evidence-aware reading, scoring and ranking, Gmail delivery, exact-label filing, and recommendation-history deduplication.
+A bounded literature-recommendation project driven by a scheduled agent run. A task YAML defines the research scope; the workflow then performs paper discovery, citation expansion, relevance screening, evidence-aware reading, scoring and ranking, Gmail delivery, exact-label filing, and recommendation-history deduplication. Scheduling is owned by the triggering platform and delivery is native: any Agent Skills-compatible agent (Hermes, Codex, or Claude Code) can run the same workflow with its own scheduler — see [Multi-platform scheduling](#multi-platform-scheduling) — and `scripts/gmail_delivery.py` talks to the Gmail REST API directly: no MCP server on any platform.
 
 This project produces recurring recommendations, not a systematic review or an exhaustive search. Every scheduled trigger is an independent invocation and sends one status email, even when no new paper qualifies. Paper content is deduplicated by DOI, arXiv ID, or normalized title; a valid trigger is never suppressed by date or email subject.
 
 ## Core boundaries
 
 - All commands use the project-pinned local runtime. Do not fall back to a user-global `paper-search` executable.
-- During a scheduled run, DevSpace performs project commands and file operations on the local machine. Do not use a cloud shell.
-- Gmail is used only to read the authenticated profile, send the report, apply the exact YAML-configured label, and read the message back to verify that label.
+- Every run performs project commands and file operations on the local machine. Do not use a cloud shell.
+- Gmail is used only to read the authenticated profile, send the report, apply the exact YAML-configured label, and read the message back to verify that label. All four go through `scripts/gmail_delivery.py`; no Gmail MCP server or connector is involved.
 - Never use Sci-Hub. Every `download_with_fallback` call must explicitly set `useSciHub=false`.
 - If full text cannot be lawfully accessed, use `abstract_only` or `substantial_excerpt`; never claim that an abstract-only assessment is a full-text reading.
 - API keys, cookies, account information, and other secrets belong only in the local `.env`, `paper-search` configuration, or environment variables. Never put them in task YAML, skills, run artifacts, or Git history.
@@ -21,9 +21,9 @@ This project produces recurring recommendations, not a systematic review or an e
 | --- | --- | --- | --- |
 | `write-literature-review` | [Zsun79/LitReviewSkill](https://github.com/Zsun79/LitReviewSkill) | commit [`a53cd419352e4dd05958f67340fde3642d84abc3`](https://github.com/Zsun79/LitReviewSkill/tree/a53cd419352e4dd05958f67340fde3642d84abc3) | Reuses stages 0–7: scope, queries, seed discovery, citation expansion, screening, ranking, and bounded full-text inspection. Its knowledge-graph and review-writing stages are intentionally omitted. |
 | `paper-search-cli` | [dr-dumpling/paper-search-cli](https://github.com/dr-dumpling/paper-search-cli) | npm `0.3.4`, MIT | Multi-source metadata search, identifier verification, backward/forward citation expansion, lawful PDF discovery, and journal metrics. |
-| `daily-literature-recommendations` | Project-local skill | `1.0.0` | Orchestrates the upstream workflows and adds Gmail delivery, label verification, task-local history, and run-artifact management. |
+| `daily-literature-recommendations` | Project-local skill | `1.0.0` | Orchestrates the upstream workflows and adds native Gmail delivery, label verification, task-local history, and run-artifact management. |
 
-Source provenance and versions are recorded in `skills-lock.json`, `package.json`, and `package-lock.json`. DevSpace and Gmail are Codex runtime connectors; they are not vendored upstream repositories.
+Source provenance and versions are recorded in `skills-lock.json`, `package.json`, and `package-lock.json`. The scheduler (the triggering platform's built-in scheduler) and the Gmail account are runtime dependencies; they are not vendored upstream repositories.
 
 The project does not fork the upstream skills. After `npm install`, `scripts/patch-paper-search.mjs` applies a small compatibility layer to the pinned `paper-search-cli 0.3.4` runtime:
 
@@ -38,14 +38,14 @@ When upgrading `paper-search-cli`, review the patch, refresh `.agents/skills/pap
 - Windows PowerShell;
 - Node.js 18 or later;
 - Python 3.10 or later;
-- a working DevSpace connection to this project directory;
-- an authorized Gmail connection that can run `get profile`, send, apply labels, and read messages back;
+- an Agent Skills-compatible agent able to trigger this project directory: Hermes, Codex, or Claude Code (Claude Code additionally needs the `npm run sync:skills` bridge, run automatically by `npm install`);
+- an authorized Gmail account: complete the one-time OAuth setup once through the Hermes `google-workspace` skill so the token lands at `$HERMES_HOME/google_token.json`, then confirm it with `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live`;
 - any API keys or institutional access required by the selected literature sources.
 
 Initial setup:
 
 ```powershell
-Set-Location E:\projects-codex\daily-literature-recommendations
+Set-Location E:\project-claude\daily-literature-recommendations
 Copy-Item .env.example .env
 npm install
 npm run doctor
@@ -69,8 +69,12 @@ Proceed when metadata search is available. Missing enhanced providers, publisher
 daily-literature-recommendations/
 ├─ .agents/skills/
 │  ├─ daily-literature-recommendations/  # Project orchestration skill
+│  │  ├─ scripts/gmail_delivery.py       # Native Gmail REST delivery: send, label, verify
+│  │  ├─ scripts/history.py              # Recommendation-history reader/writer
+│  │  └─ references/                     # Email template, contracts, delivery CLI, schema
 │  ├─ paper-search/                      # CLI routing skill
 │  └─ write-literature-review/           # Pinned LitReviewSkill
+├─ .claude/skills/                       # Generated junctions into .agents/skills (Git-ignored; rebuilt by npm run sync:skills)
 ├─ tasks/
 │  ├─ _template.yaml                     # Fully documented production template
 │  └─ smoke-mattergen.yaml               # MatterGen end-to-end smoke task
@@ -82,9 +86,10 @@ daily-literature-recommendations/
 │     └─ tmp/                            # Task-local temporary files
 ├─ scripts/
 │  ├─ patch-paper-search.mjs             # Local paper-search compatibility patch
+│  ├─ sync-claude-skills.mjs             # Mirror .agents/skills into .claude/skills for Claude Code
 │  ├─ cleanup-task-data.py               # Delete one canonical task-data directory
 │  ├─ migrate-task-data.py               # One-time legacy-layout migration
-│  ├─ write-preflight-failure.py         # Canonical connector-preflight failure writer
+│  ├─ write-preflight-failure.py         # Canonical delivery-preflight failure writer
 │  └─ task_data_layout.py                # Shared path and safety implementation
 ├─ tests/                                # Patch, history, migration, and cleanup tests
 ├─ docs/task-data-cleanup.md             # Detailed migration and cleanup guidance
@@ -141,9 +146,10 @@ Defining `scope.include` and `scope.exclude` is strongly recommended so screenin
 | `screening.allow_preprints` | `true` | Allow relevant preprints. |
 | `screening.allow_updates` | `false` | Allow a materially changed version of a delivered paper to be recommended again. |
 | `delivery.recipient` | `me` | Gmail recipient. |
+| `delivery.sender_name` | `daily-lit` | Display name shown in the recipient's inbox; passed to the CLI as `--from`. |
 | `delivery.gmail_label` | `Literature recommendations` | Exact label that must be created/applied and verified after sending. |
 | `delivery.subject_prefix` | `每日文献推荐` | Email subject prefix. |
-| `delivery.signature` | `Codex` | Message signature. |
+| `delivery.signature` | `daily-lit` | Message signature. |
 | `delivery.language` | `zh-CN` | Message language. |
 
 Minimal example:
@@ -171,10 +177,10 @@ search:
 
 delivery:
   recipient: me
-  gmail_label: Literature recommendations from codex
+  gmail_label: Literature recommendations
 ```
 
-Use `tasks/_template.yaml` for the fully commented configuration. Cadence and execution time belong to the Codex scheduled task, not the YAML.
+Use `tasks/_template.yaml` for the fully commented configuration. Cadence and execution time belong to the scheduler (a `hermes cron` job, a Codex automation, or Task Scheduler), not the YAML.
 
 ## Execution workflow
 
@@ -187,14 +193,14 @@ A normal invocation performs these stages:
 5. Score candidates on task relevance, novelty, evidence, provenance, and accessible reading evidence.
 6. Within `read_limit`, lawfully retrieve and identity-check papers and record the true reading depth.
 7. Select at most `recommend_limit` papers and write `selected.jsonl`.
-8. Send one Gmail status email, apply the exact configured `gmail_label`, and read the message back to verify it.
+8. Send one Gmail status email through `scripts/gmail_delivery.py`, apply the exact configured `gmail_label`, and read the message back to verify it.
 9. Update task-local recommendation history only after a successful send, then finalize `run.json`.
 
 Inaccessible full text is not evidence that a paper is irrelevant. Record an isolated source, download, or candidate failure and continue other independent candidates.
 
 ## Manual invocation
 
-Select this project in Codex and use a prompt such as:
+From the project root in any supported agent session (Hermes, Codex, or Claude Code), use a prompt such as:
 
 ```text
 Use the project's $daily-literature-recommendations skill to run tasks/smoke-mattergen.yaml. Follow every YAML search, reading, and recommendation limit. Do not use Sci-Hub. Complete Gmail delivery, exact-label application, read-back verification, and history update.
@@ -202,23 +208,63 @@ Use the project's $daily-literature-recommendations skill to run tasks/smoke-mat
 
 The skill provides the orchestration, so there is no equivalent `npm run recommend` command. The CLI, Python state scripts, and file operations are project-local implementation steps within the orchestrated run.
 
-## Scheduled-task prompt example
+## Multi-platform scheduling
 
-Configure the cadence in Codex Scheduled and use:
+The workflow itself is platform-neutral: skills live in `.agents/skills/` (the cross-tool Agent Skills directory), every project command is a plain `npm`/`python` call, and the task YAML contains no scheduling fields. Only the trigger differs per platform. Claude Code reads only `.claude/skills/`; `npm install` and `npm run sync:skills` rebuild that directory as junctions into `.agents/skills/`, so every platform executes the exact same skill files.
 
-```text
-First use @DevSpace to open E:\projects-codex\daily-literature-recommendations and use @Gmail get profile to validate both connections. Do not send an email during this check.
+|  | Hermes cron | Codex Automations | Windows Task Scheduler (Claude Code) |
+| --- | --- | --- | --- |
+| Skill discovery | Reads `.agents/skills/` natively; a fresh clone needs `hermes skills trust` once | Scans `.agents/skills/` natively, including `agents/openai.yaml` | `.claude/skills/` junctions generated by `npm run sync:skills` |
+| Scheduling capability | Built-in scheduled tasks, cron expressions | Built-in Automations with custom cron (`codex exec` can also be driven by any external scheduler) | Task Scheduler triggers; the agent runs via `claude -p` |
+| Registration | `hermes cron create` (see the next section) | Create a standalone automation in the Codex app: custom cron + the same task prompt; or schedule `codex exec --full-auto "<task prompt>"` | `Register-ScheduledTask` (example below) |
+| Credentials | Logged-in Hermes; Gmail OAuth token shared on disk | ChatGPT login or `CODEX_API_KEY` (`codex exec`); Gmail OAuth token shared on disk | Logged-in `claude` CLI; Gmail OAuth token shared on disk |
+| Run output | One status email; `--deliver local` keeps the result out of chat | One status email; automation runs land in the Codex inbox | One status email; stdout lands in the task history |
 
-If DevSpace is unavailable, stop immediately and state that a local run.json could not be written. Do not use a cloud shell and do not claim that a file was written.
+Notes:
 
-If Gmail get profile fails while DevSpace remains available, use @DevSpace to run this command from the project root and no other path:
-python scripts/write-preflight-failure.py --task-file tasks/smoke-mattergen.yaml --stage gmail_profile --reason "Gmail connector preflight failed" --error-code "<actual-error-code>" --devspace-status ok --gmail-status unavailable
-Confirm that the returned run_path is under data/smoke1-mattergen/runs/<timestamp>/run.json, then stop. Never hand-create runs/smoke1-mattergen/... or another legacy path.
+- The Gmail OAuth token lives in the Hermes data directory (`%LOCALAPPDATA%\hermes\google_token.json` on this machine); `gmail_delivery.py` locates it automatically, so no platform needs a copied credential.
+- Register each task with exactly one scheduler; never register the same task with two schedulers — every trigger is an independent run and each sends its own email.
+- Cadence belongs to the scheduler and is never written into the task YAML; switching platforms means re-registering the trigger, not changing the workflow.
 
-When both connections work, use the project's $daily-literature-recommendations skill to run tasks/smoke-mattergen.yaml. All project commands and file operations must run locally through @DevSpace; do not use a cloud shell. Use Gmail only for sending, exact-label application, and read-back verification. Never use Sci-Hub.
+Claude Code registration example (PowerShell, current user, no admin rights; complete an interactive `claude` login once first):
+
+```powershell
+Register-ScheduledTask -TaskName "daily-literature-claude" `
+  -Action (New-ScheduledTaskAction -Execute "cmd.exe" -Argument '/c cd /d E:\project-claude\daily-literature-recommendations && claude -p "Use the project daily-literature-recommendations skill to run tasks/smoke-mattergen.yaml. Honor every YAML limit and complete Gmail delivery, exact-label application, and the history update."') `
+  -Trigger (New-ScheduledTaskTrigger -Daily -At 08:00)
 ```
 
-Connection preflight must happen before retrieval and delivery. `write-preflight-failure.py` must create the failure record; the model must not construct the path itself. The script reads the authoritative `task_id` and `timezone`, writes atomically to the canonical directory, and refuses to overwrite an existing run. It fixes path consistency only; it does not repair Gmail connector permissions or session routing.
+The "preflight first, then run" job prompt shown in the Hermes section below works verbatim on every platform.
+
+## Scheduling the run with Hermes cron
+
+Register one cron job per task with the built-in scheduler, pinned to the project directory so every run starts from the right working directory:
+
+```bash
+hermes cron create "0 8 * * *" \
+  "Run the project's daily literature recommendation task." \
+  --name daily-literature \
+  --workdir E:/project-claude/daily-literature-recommendations \
+  --deliver local
+```
+
+`--workdir` injects the project context files and sets the working directory for terminal, file, and code-execution tools; `--deliver local` keeps the run out of chat. `0 8 * * *` means 08:00 daily in the host timezone. Inspect or remove jobs with `hermes cron list` and `hermes cron delete`.
+
+The job prompt itself stays small:
+
+```text
+First validate the Gmail credential without sending email: run `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live` from the project root.
+
+If the project directory is unavailable, stop immediately and state that a local run.json could not be written. Do not use a cloud shell and do not claim that a file was written.
+
+If the credential check fails while the project directory remains usable, run this command from the project root and no other path:
+python scripts/write-preflight-failure.py --task-file tasks/smoke-mattergen.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<actual-error-code>" --runtime-status ok --gmail-status unavailable
+Confirm that the returned run_path is under data/smoke1-mattergen/runs/<timestamp>/run.json, then stop. Never hand-create runs/smoke1-mattergen/... or another legacy path.
+
+When the check passes, use the project's $daily-literature-recommendations skill to run tasks/smoke-mattergen.yaml. Keep every project command and file operation local; do not use a cloud shell. Use Gmail only for sending, exact-label application, and read-back verification. Never use Sci-Hub.
+```
+
+Connection preflight must happen before retrieval and delivery. `write-preflight-failure.py` must create the failure record; the model must not construct the path itself. The script reads the authoritative `task_id` and `timezone`, writes atomically to the canonical directory, and refuses to overwrite an existing run. It fixes path consistency only; it does not repair a missing, expired, or revoked Gmail credential.
 
 Do not change cadence from inside the skill. Every scheduled trigger sends one report, including zero-result runs. Do not search prior Gmail subjects to suppress a valid invocation.
 
@@ -242,7 +288,7 @@ A typical run directory contains:
 
 `run.json` should make at least these facts auditable: `task_id`, `run_key`, invocation time, task timezone, configured limits, enabled sources, stage counts, capability limits/failures, email subject and recipient, `delivery_status`, `gmail_label_expected`, `gmail_label_applied`, and `label_status`. Never store Gmail message IDs, API keys, or copyrighted full text in run artifacts.
 
-Minimal connector-preflight failure state:
+Minimal delivery-credential preflight failure state:
 
 ```json
 {
@@ -250,16 +296,16 @@ Minimal connector-preflight failure state:
   "run_key": "smoke1-mattergen:2026-08-28T09-00-00",
   "status": "failed_preflight",
   "connection_check": {
-    "devspace": "ok",
-    "gmail_profile": "unavailable",
+    "local_runtime": "ok",
+    "gmail_credential": "unavailable",
     "email_sent_during_check": false
   },
   "delivery_status": "not_sent",
   "label_status": "not_attempted",
   "failures": [
     {
-      "stage": "gmail_profile",
-      "reason": "Gmail connector preflight failed",
+      "stage": "gmail_auth",
+      "reason": "Gmail credential preflight failed",
       "error_code": "FORBIDDEN"
     }
   ]
@@ -276,18 +322,19 @@ Recommendation history is stored at `data/<task_id>/state/recommendations.jsonl`
 | `npm run smoke:mock` | Run the offline CLI smoke suite. |
 | `npm run smoke:live` | Run live provider smoke checks; accesses external services. |
 | `npm run patch:paper-search` | Reapply project-local compatibility patches. |
-| `npm run failure:preflight -- ...` | Derive the canonical run path from YAML and record a connector-preflight failure. |
-| `npm test` | Run patch, history-isolation, migration, cleanup, and mock-smoke tests. |
+| `npm run failure:preflight -- ...` | Derive the canonical run path from YAML and record a delivery-preflight failure. |
+| `npm run sync:skills` | Rebuild the `.claude/skills/` junctions used by Claude Code. |
+| `npm test` | Run patch, sync, history-isolation, migration, cleanup, and mock-smoke tests. |
 
 Example preflight-failure record:
 
 ```powershell
 npm run failure:preflight -- `
   --task-file tasks/smoke-mattergen.yaml `
-  --stage gmail_profile `
-  --reason "Gmail connector preflight failed" `
+  --stage gmail_auth `
+  --reason "Gmail credential preflight failed" `
   --error-code "FORBIDDEN" `
-  --devspace-status ok `
+  --runtime-status ok `
   --gmail-status unavailable
 ```
 
@@ -331,12 +378,18 @@ The migrator copies data into a staging directory and verifies file count and by
 
 ## Gmail delivery semantics
 
-- `delivery.recipient` defaults to `me`; the authenticated Gmail account remains the actual sender.
+All Gmail reads and writes go through `.agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py`, which calls the Gmail REST API directly with the OAuth token created once by the Hermes `google-workspace` skill. No MCP server and no connector are involved.
+
+- `delivery.recipient` defaults to `me`; the CLI resolves `me` to the authenticated Gmail account, which remains the actual sender address.
+- `delivery.sender_name` is the display name shown in the inbox; pass it as `--from "<sender_name>"` and the CLI pairs the bare name with the authenticated address.
 - Subject format: `[<subject_prefix>] <display_name> | <YYYY-MM-DD HH:mm>`.
-- `delivery.gmail_label` is exact. Create it if absent, apply only that label, and read the sent message back to verify it.
+- `delivery.gmail_label` is exact. Create it if absent, apply only that label, and read the sent message back to verify it. Never reuse a similar existing label.
 - If sending succeeds but labeling fails, preserve `delivery_status=delivered`, record `label_status=pending`, and retry labeling without resending.
+- Label retries locate the already-sent message by its exact recorded subject — never by a stored message ID, which run artifacts must not contain.
 - If sending fails, do not write the papers to delivered history.
 - A zero-recommendation run still sends a status email with counts, scope, main exclusion reasons, and source limitations.
+
+Exit codes: `0` success, `2` send failed, `3` labeling failed (resend is forbidden; retry the label only), `4` credential or permission problem, `5` bad arguments. See `references/delivery-cli.md` in the skill for the full command surface.
 
 ## Security and maintenance
 

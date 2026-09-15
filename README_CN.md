@@ -2,15 +2,15 @@
 
 [English](README.md) | **简体中文**
 
-面向 Codex 计划任务的有界文献推荐项目。它按任务 YAML 定义研究范围，完成文献检索、引文扩展、相关性筛选、证据阅读、评分排序、Gmail 投递、精确标签归档和推荐历史排重。
+面向自动化计划任务的有界文献推荐项目：由计划任务触发，按任务 YAML 定义研究范围，完成文献检索、引文扩展、相关性筛选、证据阅读、评分排序、Gmail 投递、精确标签归档和推荐历史排重。调度由触发平台自带的定时功能负责，投递为原生实现：任何兼容 Agent Skills 的 agent（Hermes、Codex、Claude Code）都可以用各自的调度器触发同一条工作流（见[多平台调度](#多平台调度)）；`scripts/gmail_delivery.py` 直连 Gmail REST API —— 任何平台都不依赖 MCP 服务。
 
 本项目生成的是周期性推荐，不是系统综述或穷尽性检索。每次计划任务触发都是一次独立运行：即使没有新论文，也会发送一封状态邮件；论文内容按 DOI、arXiv ID 或规范化题名去重，但不会按日期或邮件主题跳过一次合法触发。
 
 ## 核心边界
 
 - 所有命令使用项目锁定的本地运行时，不使用用户全局安装的 `paper-search`。
-- 计划任务中的项目命令和文件操作由 DevSpace 在本机执行，不使用云端 shell。
-- Gmail 只负责读取账号 profile、发送邮件、应用 YAML 中配置的精确标签，以及回读验证标签。
+- 每次运行的项目命令和文件操作都在本机执行，不使用云端 shell。
+- Gmail 只负责读取已授权账号信息、发送邮件、应用 YAML 中配置的精确标签，以及回读验证标签。这四项都通过 `scripts/gmail_delivery.py` 完成，不涉及 Gmail MCP 服务或连接器。
 - 不得使用 Sci-Hub；调用下载回退工具时必须显式设置 `useSciHub=false`。
 - 无法获得全文时必须标记为 `abstract_only` 或 `substantial_excerpt`，不得假装完成全文阅读。
 - API key、cookie、账号信息和其他秘密只能保存在本地 `.env`、`paper-search` 配置或环境变量中，不得写入任务 YAML、Skill、运行日志或 Git 历史。
@@ -23,7 +23,7 @@
 | `paper-search-cli` | [dr-dumpling/paper-search-cli](https://github.com/dr-dumpling/paper-search-cli) | npm `0.3.4`，MIT | 多来源元数据检索、DOI/标识核验、参考文献与施引文献扩展、合法 PDF 发现及期刊指标查询。 |
 | `daily-literature-recommendations` | 本项目本地 Skill | `1.0.0` | 将上述两个上游能力编排为定期推荐流程，并增加 Gmail 投递、标签验证、任务本地历史和运行产物管理。 |
 
-来源和版本记录在 `skills-lock.json`、`package.json` 与 `package-lock.json` 中。DevSpace 和 Gmail 是 Codex 运行时连接器，不是复制到本仓库的上游代码依赖。
+来源和版本记录在 `skills-lock.json`、`package.json` 与 `package-lock.json` 中。调度器（触发平台自带的定时功能）和 Gmail 账号属于运行时依赖，不是复制到本仓库的上游代码依赖。
 
 项目不 fork 上游 Skill。`scripts/patch-paper-search.mjs` 会在 `npm install` 后对锁定的 `paper-search-cli 0.3.4` 应用少量项目兼容补丁：
 
@@ -38,14 +38,14 @@
 - Windows PowerShell；
 - Node.js 18 或更高版本；
 - Python 3.10 或更高版本；
-- 可使用项目目录的 DevSpace 连接；
-- 已授权且能执行 `get profile`、发送、加标签和回读的 Gmail 连接；
+- 可触发本项目目录、兼容 Agent Skills 的 agent：Hermes、Codex 或 Claude Code（Claude Code 还需 `npm run sync:skills` 桥接，`npm install` 会自动执行）；
+- 已授权的 Gmail 账号：先通过 Hermes 的 `google-workspace` skill 完成一次性 OAuth，使 token 落到 `$HERMES_HOME/google_token.json`，再用 `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live` 验证；
 - 按需配置检索源所需的 API key 或机构访问权限。
 
 首次初始化：
 
 ```powershell
-Set-Location E:\projects-codex\daily-literature-recommendations
+Set-Location E:\project-claude\daily-literature-recommendations
 Copy-Item .env.example .env
 npm install
 npm run doctor
@@ -69,8 +69,12 @@ npx --no-install paper-search smoke --mock --pretty
 daily-literature-recommendations/
 ├─ .agents/skills/
 │  ├─ daily-literature-recommendations/  # 本项目编排 Skill
+│  │  ├─ scripts/gmail_delivery.py       # 原生 Gmail 投递：发送、加标签、回读验证
+│  │  ├─ scripts/history.py              # 推荐历史的读写
+│  │  └─ references/                     # 邮件模板、契约、投递 CLI、配置 schema
 │  ├─ paper-search/                      # CLI 路由 Skill
 │  └─ write-literature-review/           # 锁定的 LitReviewSkill
+├─ .claude/skills/                       # 指向 .agents/skills 的生成 junction（Git 忽略；npm run sync:skills 重建）
 ├─ tasks/
 │  ├─ _template.yaml                     # 完整生产任务模板
 │  └─ smoke-mattergen.yaml               # MatterGen 端到端样例任务
@@ -82,9 +86,10 @@ daily-literature-recommendations/
 │     └─ tmp/                            # 该任务临时文件
 ├─ scripts/
 │  ├─ patch-paper-search.mjs             # paper-search-cli 本地兼容补丁
+│  ├─ sync-claude-skills.mjs             # 将 .agents/skills 镜像为 .claude/skills 供 Claude Code 使用
 │  ├─ cleanup-task-data.py               # 按 task_id 清理统一数据目录
 │  ├─ migrate-task-data.py               # 旧分散布局的一次性迁移器
-│  ├─ write-preflight-failure.py          # 将连接预检失败写入规范运行目录
+│  ├─ write-preflight-failure.py         # 将投递凭据预检失败写入规范运行目录
 │  └─ task_data_layout.py                # 数据路径与安全校验公共实现
 ├─ tests/                                # 补丁、历史、迁移和清理测试
 ├─ docs/task-data-cleanup.md             # 数据迁移与清理细节
@@ -139,9 +144,10 @@ YAML 文件名只用于人类管理，文件内部的 `task_id` 才是运行目�
 | `screening.allow_preprints` | `true` | 是否允许预印本。 |
 | `screening.allow_updates` | `false` | 是否允许有实质更新的已推荐论文再次进入推荐。 |
 | `delivery.recipient` | `me` | Gmail 收件人。 |
+| `delivery.sender_name` | `daily-lit` | 收件箱中显示的发件人名称，作为 `--from` 传给 CLI。 |
 | `delivery.gmail_label` | `Literature recommendations` | 发送后必须创建/应用/回读验证的精确标签名。 |
 | `delivery.subject_prefix` | `每日文献推荐` | 邮件主题前缀。 |
-| `delivery.signature` | `Codex` | 邮件正文署名。 |
+| `delivery.signature` | `daily-lit` | 邮件正文署名。 |
 | `delivery.language` | `zh-CN` | 邮件正文语言。 |
 
 最小示例：
@@ -169,10 +175,10 @@ search:
 
 delivery:
   recipient: me
-  gmail_label: Literature recommendations from codex
+  gmail_label: Literature recommendations
 ```
 
-完整注释版请直接使用 `tasks/_template.yaml`。调度频率和执行时间不写在 YAML 中，由 Codex 计划任务单独控制。
+完整注释版请直接使用 `tasks/_template.yaml`。调度频率和执行时间不写在 YAML 中，由调度器（`hermes cron` 任务、Codex Automations 或 Windows 任务计划程序）单独控制。
 
 ## 执行流程
 
@@ -185,14 +191,14 @@ delivery:
 5. 按相关性、创新性、证据、来源可靠性和可读证据进行 100 分制排序；
 6. 在 `read_limit` 内合法获取并核验论文身份，记录真实阅读深度；
 7. 选择不超过 `recommend_limit` 的论文，生成 `selected.jsonl`；
-8. Gmail 发送一封状态邮件，应用 YAML 中的精确 `gmail_label` 并回读验证；
+8. 通过 `scripts/gmail_delivery.py` 发送一封状态邮件，应用 YAML 中的精确 `gmail_label` 并回读验证；
 9. 仅在发送成功后更新任务本地推荐历史，最后完善 `run.json`。
 
 无法获得全文不是“不相关”的证据。单个来源、下载或候选失败时记录失败并继续其他独立候选。
 
 ## 手动调用
 
-在 Codex 中选择本项目并使用：
+在任一受支持 agent 的项目根目录会话（Hermes、Codex 或 Claude Code）中使用：
 
 ```text
 使用项目的 $daily-literature-recommendations 执行 tasks/smoke-mattergen.yaml。严格遵守 YAML 的检索、阅读和推荐上限；不得使用 Sci-Hub；完成 Gmail 发送、精确标签应用、回读验证和历史更新。
@@ -200,23 +206,63 @@ delivery:
 
 Skill 负责完整编排，因此不存在一个等价的 `npm run recommend` 命令。底层检索 CLI、Python 状态脚本和文件读写只是编排过程中的项目本地步骤。
 
-## 示例计划任务提示词
+## 多平台调度
 
-在 Codex 计划任务中设置频率，并使用以下提示词：
+工作流本身与平台无关：技能位于 `.agents/skills/`（Agent Skills 跨工具标准目录），所有项目命令都是普通的 `npm`/`python` 调用，任务 YAML 不包含任何调度字段。各平台只有触发方式不同。Claude Code 只读取 `.claude/skills/`；`npm install` 和 `npm run sync:skills` 会把该目录重建为指向 `.agents/skills/` 的 junction，因此所有平台执行的是同一份技能文件。
 
-```text
-先用 @DevSpace 打开 E:\projects-codex\daily-literature-recommendations，并用 @Gmail get profile 验证两项连接；此时不要发送邮件。
+|  | Hermes 定时任务 | Codex Automations | Windows 任务计划程序（Claude Code） |
+| --- | --- | --- | --- |
+| 技能发现 | 原生识别 `.agents/skills/`；新 clone 需执行一次 `hermes skills trust` | 原生扫描 `.agents/skills/`，含 `agents/openai.yaml` | `npm run sync:skills` 生成的 `.claude/skills/` junction |
+| 定时能力 | 内置定时任务，cron 表达式 | 内置 Automations，自定义 cron（也可把 `codex exec` 交给任意外部调度器） | 任务计划程序触发器；agent 经 `claude -p` 运行 |
+| 注册方式 | `hermes cron create`（见下节） | Codex 应用内创建独立自动化：自定义 cron + 同一段任务提示词；或调度 `codex exec --full-auto "<任务提示词>"` | `Register-ScheduledTask`（见下方示例） |
+| 凭据要求 | 已登录 Hermes；Gmail OAuth token 磁盘共享 | ChatGPT 登录或 `CODEX_API_KEY`（`codex exec`）；Gmail OAuth token 磁盘共享 | 已登录 `claude` CLI；Gmail OAuth token 磁盘共享 |
+| 运行产物 | 一封状态邮件；`--deliver local` 使结果不进聊天 | 一封状态邮件；自动化运行记录进入 Codex 收件箱 | 一封状态邮件；stdout 写入任务历史 |
 
-如果 DevSpace 不可用，立即停止，明确说明无法写入本地 run.json；不要使用云端 shell，也不要声称已经写入文件。
+说明：
 
-如果 Gmail get profile 失败但 DevSpace 仍可用，只能通过 @DevSpace 在项目根目录执行：
-python scripts/write-preflight-failure.py --task-file tasks/smoke-mattergen.yaml --stage gmail_profile --reason "Gmail connector preflight failed" --error-code "<实际错误码>" --devspace-status ok --gmail-status unavailable
-确认脚本返回的 run_path 位于 data/smoke1-mattergen/runs/<timestamp>/run.json 后停止。不要手工创建 runs/smoke1-mattergen/... 或其他旧路径。
+- Gmail OAuth token 位于 Hermes 数据目录（本机为 `%LOCALAPPDATA%\hermes\google_token.json`）；`gmail_delivery.py` 会自动定位，无需为其他平台复制凭据。
+- 每个任务只在一个调度器注册一条定时项；不要把同一任务同时注册到两个调度器——每次触发都是一次独立运行，会各自发送邮件。
+- 调度频率属于调度器，绝不写入任务 YAML；切换平台只是重新注册触发器，不改动工作流本身。
 
-连接正常后，用项目的 $daily-literature-recommendations 执行 tasks/smoke-mattergen.yaml。所有项目命令和文件操作只能通过 @DevSpace 在本机完成；不要使用云端 shell。Gmail 仅用于发送、精确加标签及回读验证。不得使用 Sci-Hub。
+Claude Code 注册示例（PowerShell，当前用户，无需管理员；需先完成一次交互式 `claude` 登录）：
+
+```powershell
+Register-ScheduledTask -TaskName "daily-literature-claude" `
+  -Action (New-ScheduledTaskAction -Execute "cmd.exe" -Argument '/c cd /d E:\project-claude\daily-literature-recommendations && claude -p "使用项目的 daily-literature-recommendations 技能执行 tasks/smoke-mattergen.yaml。严格遵守全部 YAML 上限，完成 Gmail 发送、精确标签应用和历史更新。"') `
+  -Trigger (New-ScheduledTaskTrigger -Daily -At 08:00)
 ```
 
-连接预检必须发生在检索和发送之前。失败文件必须由 `write-preflight-failure.py` 生成，不能由模型拼接路径。该脚本从 YAML 读取真实 `task_id` 与 `timezone`，原子写入规范目录，并拒绝覆盖已有运行。它只解决失败记录的路径一致性，不修复 Gmail connector 自身的权限或会话路由问题。
+下节 Hermes 部分展示的「先预检后运行」任务提示词在所有平台原样可用。
+
+## 用 Hermes cron 定时运行
+
+每个任务注册一个内置 cron 任务，并把工作目录固定到项目目录，确保每次运行都从正确的位置开始：
+
+```bash
+hermes cron create "0 8 * * *" \
+  "运行本项目的文献推荐任务。" \
+  --name daily-literature \
+  --workdir E:/project-claude/daily-literature-recommendations \
+  --deliver local
+```
+
+`--workdir` 会注入项目上下文文件，并把终端、文件与代码执行工具的工作目录设为该路径；`--deliver local` 表示运行结果不进入聊天。`0 8 * * *` 表示按宿主时区每天 08:00 执行。用 `hermes cron list` / `hermes cron delete` 查看或删除任务。
+
+任务提示词保持简短：
+
+```text
+先在不发信的前提下验证 Gmail 凭据：在项目根目录执行 `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live`。
+
+如果项目目录不可用，立即停止，明确说明无法写入本地 run.json；不要使用云端 shell，也不要声称已经写入文件。
+
+如果凭据检查失败但项目目录仍可写，只能在项目根目录执行：
+python scripts/write-preflight-failure.py --task-file tasks/smoke-mattergen.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<实际错误码>" --runtime-status ok --gmail-status unavailable
+确认脚本返回的 run_path 位于 data/smoke1-mattergen/runs/<timestamp>/run.json 后停止。不要手工创建 runs/smoke1-mattergen/... 或其他旧路径。
+
+凭据检查通过后，用项目的 $daily-literature-recommendations 执行 tasks/smoke-mattergen.yaml。所有项目命令和文件操作都在本机完成；不要使用云端 shell。Gmail 仅用于发送、精确加标签及回读验证。不得使用 Sci-Hub。
+```
+
+凭据预检必须发生在检索和发送之前。失败文件必须由 `write-preflight-failure.py` 生成，不能由模型拼接路径。该脚本从 YAML 读取真实 `task_id` 与 `timezone`，原子写入规范目录，并拒绝覆盖已有运行。它只解决失败记录的路径一致性，不修复缺失、过期或被撤销的 Gmail 凭据。
 
 不要在 Skill 内修改计划频率。每次计划触发都发送一封报告，包括零结果运行；不要通过搜索 Gmail 已发送主题来压制本次触发。
 
@@ -240,7 +286,7 @@ data/<task_id>/downloads/<YYYY-MM-DDTHH-mm-ss>/
 
 `run.json` 至少应能审计 `task_id`、`run_key`、调用时间、任务时区、配置上限、启用来源、各阶段计数、能力限制/失败、邮件主题与收件人、`delivery_status`、`gmail_label_expected`、`gmail_label_applied` 和 `label_status`。不要记录 Gmail message ID、API key 或受版权保护的全文。
 
-连接预检失败时可采用如下最小状态：
+投递凭据预检失败时可采用如下最小状态：
 
 ```json
 {
@@ -248,16 +294,16 @@ data/<task_id>/downloads/<YYYY-MM-DDTHH-mm-ss>/
   "run_key": "smoke1-mattergen:2026-08-28T09-00-00",
   "status": "failed_preflight",
   "connection_check": {
-    "devspace": "ok",
-    "gmail_profile": "unavailable",
+    "local_runtime": "ok",
+    "gmail_credential": "unavailable",
     "email_sent_during_check": false
   },
   "delivery_status": "not_sent",
   "label_status": "not_attempted",
   "failures": [
     {
-      "stage": "gmail_profile",
-      "reason": "Gmail connector preflight failed",
+      "stage": "gmail_auth",
+      "reason": "Gmail credential preflight failed",
       "error_code": "FORBIDDEN"
     }
   ]
@@ -274,18 +320,19 @@ data/<task_id>/downloads/<YYYY-MM-DDTHH-mm-ss>/
 | `npm run smoke:mock` | 执行不依赖实时网络的 CLI 冒烟测试。 |
 | `npm run smoke:live` | 执行实时来源冒烟测试；会访问外部服务。 |
 | `npm run patch:paper-search` | 重新应用项目本地兼容补丁。 |
-| `npm run failure:preflight -- ...` | 由 YAML 派生规范目录并记录连接预检失败。 |
-| `npm test` | 运行补丁、历史隔离、迁移、清理和 mock smoke 测试。 |
+| `npm run sync:skills` | 重建 Claude Code 使用的 `.claude/skills/` junction。 |
+| `npm run failure:preflight -- ...` | 由 YAML 派生规范目录并记录投递凭据预检失败。 |
+| `npm test` | 运行技能桥接、补丁、历史隔离、投递、清理和 mock smoke 测试。 |
 
 预检失败记录示例：
 
 ```powershell
 npm run failure:preflight -- `
   --task-file tasks/smoke-mattergen.yaml `
-  --stage gmail_profile `
-  --reason "Gmail connector preflight failed" `
+  --stage gmail_auth `
+  --reason "Gmail credential preflight failed" `
   --error-code "FORBIDDEN" `
-  --devspace-status ok `
+  --runtime-status ok `
   --gmail-status unavailable
 ```
 
@@ -329,12 +376,18 @@ npm run migrate:task -- --task-id $taskId --apply
 
 ## Gmail 投递语义
 
-- `delivery.recipient` 默认为 `me`；真实发件地址由已授权 Gmail 账号决定。
+Gmail 的读取与写入全部由 `.agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py` 完成：它使用 Hermes `google-workspace` skill 一次性创建的 OAuth token 直接调用 Gmail REST API，不涉及任何 MCP 服务或连接器。
+
+- `delivery.recipient` 默认为 `me`，CLI 会把 `me` 解析为已授权账号；真实发件地址始终是该账号。
+- `delivery.sender_name` 是收件箱中显示的发件人名称；用 `--from "<sender_name>"` 传入，CLI 会把该名称与已授权地址配成 `"名称" <地址>`。
 - 邮件主题格式为 `[<subject_prefix>] <display_name> | <YYYY-MM-DD HH:mm>`。
-- `delivery.gmail_label` 是精确值。标签不存在时应创建，只应用这个标签，并在写入后回读目标邮件验证。
+- `delivery.gmail_label` 是精确值。标签不存在时应创建，只应用这个标签，并在写入后回读目标邮件验证；不得复用名称相近的既有标签。
 - Gmail 发送成功但标签失败时，保留 `delivery_status=delivered`，记录 `label_status=pending`，重试标签时不得重发邮件。
+- 标签重试按运行记录中的精确主题定位那封已发邮件，不保存 message ID（运行产物禁止包含该 ID）。
 - Gmail 发送失败时，不得把论文写入已投递历史。
 - 零篇推荐仍需发送包含检索计数、范围、主要排除原因和来源限制的状态邮件。
+
+退出码：`0` 成功；`2` 发送失败；`3` 标签失败（禁止重发，只重试标签）；`4` 凭据或权限问题；`5` 参数错误。完整命令面见 Skill 内的 `references/delivery-cli.md`。
 
 ## 安全与维护
 

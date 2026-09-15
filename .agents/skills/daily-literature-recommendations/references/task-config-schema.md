@@ -62,8 +62,9 @@ screening:
 delivery:
   recipient: me
   gmail_label: Literature recommendations
+  sender_name: daily-lit
   subject_prefix: 每日文献推荐
-  signature: Codex
+  signature: daily-lit
   language: zh-CN
 
 ```
@@ -83,6 +84,8 @@ The YAML filename is not authoritative and may differ from `task_id`.
 
 `delivery.gmail_label` is the exact post-send Gmail label name. The workflow must use that parsed value without substituting a similar existing label. Gmail should create the exact label when it is absent, apply it to the delivered message, and verify it before recording `label_status=applied`.
 
+`delivery.sender_name` is the name the recipient sees in their inbox. Pass it to the delivery CLI as `--from "<sender_name>"`; a bare name is paired with the authenticated address, so the real `From` address always stays the authorized account and no send-as alias is needed.
+
 ## Source routing defaults
 
 - Materials science, physics, chemistry, AI: `crossref,openalex,semantic,arxiv`; add `core,openaire` for open-access discovery.
@@ -97,7 +100,7 @@ Use entitled publisher/database sources only when the corresponding key or insti
 Keep the scheduled prompt small:
 
 ```text
-Open the selected project through DevSpace and validate the Gmail profile without sending email. If Gmail validation fails while DevSpace remains writable, run `python scripts/write-preflight-failure.py --task-file tasks/<task-id>.yaml --stage gmail_profile --reason "Gmail connector preflight failed" --error-code "<error-code>" --devspace-status ok --gmail-status unavailable` from the project root, then stop. Use only the returned `data/<task-id>/runs/<timestamp>/run.json` path; never write a legacy `runs/<task-id>/...` path. If DevSpace is unavailable, stop without claiming a local file was written.
-When both connections work, use $daily-literature-recommendations to run tasks/<task-id>.yaml from the selected project. Follow the configured limits, send the result by Gmail, file it under the configured label, and update recommendation history. Do not change the schedule from inside the skill.
+Validate the Gmail credential without sending email: run `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live` from the project root. If it fails while the project directory remains writable, run `python scripts/write-preflight-failure.py --task-file tasks/<task-id>.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<error-code>" --runtime-status ok --gmail-status unavailable` from the project root, then stop. Use only the returned `data/<task-id>/runs/<timestamp>/run.json` path; never write a legacy `runs/<task-id>/...` path. If the project directory is unavailable, stop without claiming a local file was written.
+When the check passes, use $daily-literature-recommendations to run tasks/<task-id>.yaml from the project root. Follow the configured limits, send the result through the native Gmail delivery CLI, file it under the configured exact label, and update recommendation history. Do not change the schedule from inside the skill.
 Treat every scheduled trigger as a new invocation and send one report even when there are zero new recommendations. Do not suppress a run by searching prior Gmail subjects; cadence and duplicate triggers are controlled by the scheduled task.
 ```

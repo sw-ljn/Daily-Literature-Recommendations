@@ -37,12 +37,12 @@ def main() -> int:
             "--task-file",
             "tasks/config-name-differs.yaml",
             "--stage",
-            "gmail_profile",
+            "gmail_auth",
             "--reason",
             "FORBIDDEN: connector unavailable",
             "--error-code",
             "FORBIDDEN",
-            "--devspace-status",
+            "--runtime-status",
             "ok",
             "--gmail-status",
             "unavailable",
@@ -58,8 +58,8 @@ def main() -> int:
         assert record["run_key"] == "target-task:2026-08-28T12-00-22"
         assert record["timezone"] == "America/Los_Angeles"
         assert record["status"] == "failed_preflight"
-        assert record["connection_check"]["devspace"] == "ok"
-        assert record["connection_check"]["gmail_profile"] == "unavailable"
+        assert record["connection_check"]["local_runtime"] == "ok"
+        assert record["connection_check"]["gmail_credential"] == "unavailable"
         assert record["delivery_status"] == "not_sent"
         assert record["failures"][0]["error_code"] == "FORBIDDEN"
         assert not (root / "runs").exists(), "legacy roots must never be created"
@@ -70,7 +70,7 @@ def main() -> int:
             "--task-file",
             "tasks/config-name-differs.yaml",
             "--stage",
-            "gmail_profile",
+            "gmail_auth",
             "--reason",
             "duplicate",
             "--invocation-time",
@@ -91,7 +91,7 @@ def main() -> int:
             "--task-file",
             "tasks/bad-timezone.yaml",
             "--stage",
-            "gmail_profile",
+            "gmail_auth",
             "--reason",
             "unavailable",
             check=False,

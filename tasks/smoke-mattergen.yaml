@@ -55,7 +55,8 @@ screening:
 
 delivery:
   recipient: me
-  gmail_label: Literature recommendations from codex
+  gmail_label: Literature recommendations
+  sender_name: daily-lit
   subject_prefix: 文献推荐流程测试
-  signature: Codex
+  signature: daily-lit
   language: zh-CN

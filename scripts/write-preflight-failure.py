@@ -49,14 +49,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stage", required=True, help="Stable failure stage identifier")
     parser.add_argument("--reason", required=True, help="Concise failure reason; do not include secrets")
     parser.add_argument(
-        "--devspace-status",
+        "--runtime-status",
         choices=("ok", "unavailable", "unknown"),
         default="unknown",
+        help="Whether the local project runtime and project directory were usable",
     )
     parser.add_argument(
         "--gmail-status",
         choices=("ok", "unavailable", "unknown"),
         default="unknown",
+        help="Whether the native Gmail delivery credential was usable",
     )
     parser.add_argument("--error-code", default="")
     parser.add_argument(
@@ -115,8 +117,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "timezone": config.timezone,
         "status": "failed_preflight",
         "connection_check": {
-            "devspace": args.devspace_status,
-            "gmail_profile": args.gmail_status,
+            "local_runtime": args.runtime_status,
+            "gmail_credential": args.gmail_status,
             "email_sent_during_check": False,
         },
         "delivery_status": "not_sent",

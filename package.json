@@ -4,8 +4,9 @@
   "private": true,
   "description": "Project-local Codex skills and runtime for scheduled literature recommendations.",
   "scripts": {
-    "postinstall": "node scripts/patch-paper-search.mjs",
+    "postinstall": "node scripts/patch-paper-search.mjs && node scripts/sync-claude-skills.mjs",
     "patch:paper-search": "node scripts/patch-paper-search.mjs",
+    "sync:skills": "node scripts/sync-claude-skills.mjs",
     "cleanup:task": "python scripts/cleanup-task-data.py",
     "migrate:task": "python scripts/migrate-task-data.py",
     "failure:preflight": "python scripts/write-preflight-failure.py",
@@ -13,7 +14,7 @@
     "doctor": "paper-search doctor --pretty",
     "smoke:mock": "paper-search smoke --mock --pretty",
     "smoke:live": "paper-search smoke --live --pretty",
-    "test": "node scripts/patch-paper-search.mjs && node --test tests/paper-search-patches.test.mjs && python tests/test_history.py && python tests/test_cleanup_task_data.py && python tests/test_preflight_failure.py && npm run smoke:mock"
+    "test": "npm run sync:skills && node scripts/patch-paper-search.mjs && node --test tests/paper-search-patches.test.mjs && node --test tests/claude-skills-sync.test.mjs && python tests/test_history.py && python tests/test_gmail_delivery.py && python tests/test_cleanup_task_data.py && python tests/test_preflight_failure.py && npm run smoke:mock"
   },
   "license": "UNLICENSED",
   "type": "commonjs",

@@ -1,6 +1,6 @@
 ---
 name: daily-literature-recommendations
-description: Orchestrate bounded recurring academic-paper discovery, screening, citation expansion, reading, ranking, Gmail delivery, label filing, and recommendation-history updates. Use for scheduled or manual daily/weekly literature recommendation tasks driven by a task YAML file, especially when Codex should combine the installed write-literature-review workflow, paper-search CLI, and Gmail plugin without producing a full literature-review article.
+description: Orchestrate bounded recurring academic-paper discovery, screening, citation expansion, reading, ranking, Gmail delivery, label filing, and recommendation-history updates. Use for scheduled or manual daily/weekly literature recommendation tasks driven by a task YAML file, especially when an agent should combine the installed write-literature-review workflow, paper-search CLI, and the native Gmail delivery CLI without producing a full literature-review article.
 ---
 
 # Daily Literature Recommendations
@@ -12,7 +12,7 @@ Run a repeatable recommendation pipeline. Reuse upstream skills unchanged: apply
 1. Read the task YAML and `references/task-config-schema.md`. Do not invent a missing research scope or target relationship.
 2. Read `../write-literature-review/SKILL.md` and its authoritative `references/workflow.md` completely. Use only steps 0-7; do not build its knowledge graph, review Markdown, or PDF.
 3. Read `../paper-search/SKILL.md` and the relevant routing/CLI references completely before calling the CLI.
-4. Use the installed Gmail skill for all Gmail reads and writes. Respect its exact-recipient, write, and reporting rules.
+4. Read `references/delivery-cli.md` before the first Gmail call. All Gmail reads and writes go through the project-local native delivery CLI (`scripts/gmail_delivery.py`); it talks to the Gmail REST API directly and shares the OAuth token managed by the installed `google-workspace` skill. Do not add a Gmail MCP server or a Gmail plugin for this workflow. Confirm the credential with `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check` (add `--live` to also confirm the mailbox is reachable).
 5. Run every CLI command from the project root through the pinned local runtime: `npx --no-install paper-search ...`. Never fall back to a user-global `paper-search` executable.
 6. Run `npx --no-install paper-search doctor --pretty`. Continue when metadata search is available; treat missing enhanced or publisher keys as capability limits, not fatal errors.
 
@@ -35,13 +35,13 @@ The `task_id` field inside the YAML is authoritative; do not derive it from the 
 
 ### Connector-preflight failures
 
-Do not hand-build a path when a connector check fails before the normal workflow establishes its run directory. If DevSpace is writable but Gmail profile validation fails, run this project-local command from the project root:
+Do not hand-build a path when a connector check fails before the normal workflow establishes its run directory. The Gmail check is `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live`; when it fails (no token, missing `gmail.send`/`gmail.modify` scope, or unreachable mailbox) while the project directory itself is writable, run this project-local command from the project root:
 
 ```powershell
-python scripts/write-preflight-failure.py --task-file tasks/<task-config-name>.yaml --stage gmail_profile --reason "Gmail connector preflight failed" --error-code "<provider-or-host-error-code>" --devspace-status ok --gmail-status unavailable
+python scripts/write-preflight-failure.py --task-file tasks/<task-config-name>.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<auth-check status or provider error code>" --runtime-status ok --gmail-status unavailable
 ```
 
-The script reads the YAML's authoritative `task_id` and `timezone`, creates a unique `data/<task-id>/runs/<timestamp>/run.json`, refuses to overwrite an existing run, and never creates legacy `runs/`, `downloads/`, or shared `state/` roots. Use the returned `run_path`; do not substitute another path. If DevSpace itself is unavailable, a project-local failure file cannot be written honestly: stop and report that boundary without using a cloud shell.
+The script reads the YAML's authoritative `task_id` and `timezone`, creates a unique `data/<task-id>/runs/<timestamp>/run.json`, refuses to overwrite an existing run, and never creates legacy `runs/`, `downloads/`, or shared `state/` roots. Use the returned `run_path`; do not substitute another path. If the project directory itself is unavailable, a project-local failure file cannot be written honestly: stop and report that boundary without using a cloud shell.
 
 ## Workflow
 
@@ -50,7 +50,7 @@ The script reads the YAML's authoritative `task_id` and `timezone`, creates a un
 - Derive the invocation timestamp from the task timezone and set a unique `run_key=<task-id>:<YYYY-MM-DDTHH-mm-ss>`.
 - Use `data/<task-id>/runs/<YYYY-MM-DDTHH-mm-ss>/` and the matching `data/<task-id>/downloads/<YYYY-MM-DDTHH-mm-ss>/` directory so separate invocations never overwrite one another.
 - Set the subject to `[<subject-prefix>] <display-name> | <YYYY-MM-DD HH:mm>`.
-- Do not search Gmail Sent to suppress an invocation. Do not skip because an earlier email has the same task, date, or subject. The Codex scheduled task owns cadence and each trigger is an authorized independent run.
+- Do not search Gmail Sent to suppress an invocation. Do not skip because an earlier email has the same task, date, or subject. The scheduled task owns cadence and each trigger is an authorized independent run.
 - Record limits, enabled sources, invocation timestamp, and `run_key` in `run.json`.
 
 ### 1. Define scope and queries (LitReview 0-1)
@@ -113,16 +113,20 @@ Use citation count only as a weak tie-breaker. Record component scores and the f
 
 ### 7. Deliver through Gmail
 
+Read `references/delivery-cli.md` for the exact commands, exit codes, and `run.json` fields. Ship this order and never reorder it: **send → record history as `pending` → label → verify → mark `applied`.**
+
 - Read `references/email-template.md` and compose one plain-text or simple HTML email.
-- Send to `me` unless the task specifies an exact recipient.
-- Sign as `Codex`; the authenticated Gmail account remains the actual sender address.
+- Send to `me` unless the task specifies an exact recipient. The CLI resolves `me` to the authenticated account itself.
+- Pass `--from "<delivery.sender_name>"` so the inbox shows the configured name; the authenticated Gmail account remains the actual sender address.
+- Sign with `delivery.signature`; the authenticated Gmail account remains the actual sender address.
 - Send exactly one status email for every invocation, including when zero papers survive screening or all candidates were previously recommended. Never suppress the email because a prior invocation already sent one.
 - Include the run scope and counts, then structured entries for every selected paper.
-- After a successful send, immediately write delivered recommendation history with `scripts/history.py record-delivery`.
+- Send with `scripts/gmail_delivery.py send`. A non-zero exit means nothing was emailed: do not mark recommendations delivered and do not write history rows.
+- After a successful send, immediately write delivered recommendation history with `scripts/history.py record-delivery` and `--label-status pending`.
 - Resolve the post-send label only from the parsed `delivery.gmail_label` value (default `Literature recommendations`). Treat that value as exact: never substitute an existing, similar, default, or user-mentioned label name.
-- Apply that exact configured label to the sent/received message with Gmail `create_missing_labels=true`, so Gmail creates it when absent. Do not apply an additional fallback label.
-- Verify that the target message carries the configured label after the write. Record both `gmail_label_expected` and `gmail_label_applied` in `run.json`; do not infer success merely from a generic label-write response.
-- Only after exact-label verification succeeds, update the run/history record to `label_status=applied`. If creation, application, or verification fails, preserve `delivery_status=delivered`, record `label_status=pending`, and do not resend the email on retry.
+- Apply that exact configured label to the sent message with `scripts/gmail_delivery.py label`, which matches the name exactly, creates the label when absent, and verifies the write. Do not apply an additional fallback label.
+- Record both `gmail_label_expected` and `gmail_label_applied` in `run.json`; do not infer success merely from a generic label-write response or from the CLI's own success line.
+- Only after exact-label verification succeeds, flip the run/history record to `label_status=applied` with `scripts/history.py mark-label-status`. If creation, application, or verification fails, preserve `delivery_status=delivered`, keep `label_status=pending`, and do not resend the email on retry: re-run only the label step (see `references/contracts.md`).
 - If sending fails, do not mark recommendations delivered.
 
 ### 8. Finish the run
@@ -144,7 +148,20 @@ Record a successful delivery:
 python .agents/skills/daily-literature-recommendations/scripts/history.py record-delivery --history data/<task-id>/state/recommendations.jsonl --input selected.jsonl --task-id <task-id> --run-key <run-key> --email-subject "<subject>" --gmail-label "<configured-gmail-label>" --label-status pending
 ```
 
-Use `references/contracts.md` for paper/state fields and failure-state semantics.
+Flip a delivery to `label_status=applied` once the label is verified (this is the only command that may update a delivered row, and it never resends):
+
+```powershell
+python .agents/skills/daily-literature-recommendations/scripts/history.py mark-label-status --history data/<task-id>/state/recommendations.jsonl --task-id <task-id> --run-key <run-key> --gmail-label "<configured-gmail-label>" --status applied
+```
+
+Send and file the email through the native delivery CLI:
+
+```powershell
+python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py send --to me --from "<sender_name>" --subject "<subject>" --body-file <body-file>
+python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py label --subject "<subject>" --label "<configured-gmail-label>"
+```
+
+Use `references/delivery-cli.md` for the full command set and exit codes, and `references/contracts.md` for paper/state fields and failure-state semantics.
 
 ## Hard boundaries
 

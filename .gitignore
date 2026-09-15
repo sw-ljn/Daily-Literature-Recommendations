@@ -22,6 +22,10 @@ data/
 !/tasks/_template.yaml
 !/tasks/smoke-mattergen.yaml
 
+# Generated Claude Code bridge: junctions into .agents/skills, rebuilt by
+# `npm run sync:skills`. Never commit or edit the mirrors.
+/.claude/
+
 # Generated diagnostics and temporary artifacts stay local.
 /doctor-*.json
 /tmp/
