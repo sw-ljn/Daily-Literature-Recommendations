@@ -135,6 +135,14 @@ For Claude Code, trigger it from Windows Task Scheduler with `claude -p "<task p
 
 ## Going deeper
 
+Project documentation (each in English and 简体中文):
+
+- [Upstream projects, local orchestration & environment](docs/architecture.md) — provenance and pinning of `write-literature-review` / `paper-search-cli`, the local patch layer, runtime prerequisites, and core boundaries ([简体中文](docs/architecture_CN.md))
+- [Repository layout & task YAML reference](docs/tasks-and-layout.md) — full directory tree, every task field with defaults ([简体中文](docs/tasks-and-layout_CN.md))
+- [Execution workflow, data & `run.json`](docs/workflow-and-data.md) — the nine pipeline stages, Hermes cron walkthrough, preflight-failure recording, cleanup/migration, Gmail delivery semantics ([简体中文](docs/workflow-and-data_CN.md))
+
+Skill-internal references:
+
 - `tasks/_template.yaml` — fully commented task configuration
 - `.agents/skills/daily-literature-recommendations/SKILL.md` — the complete orchestration workflow
 - `docs/task-data-cleanup.md` — data cleanup and migration details
