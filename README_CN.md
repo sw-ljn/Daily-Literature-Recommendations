@@ -138,9 +138,7 @@ python scripts/write-preflight-failure.py --task-file tasks/<任务>.yaml --stag
 
 项目文档（每篇均有英文与简体中文版）：
 
-- [上游项目、本地编排与环境要求](docs/architecture_CN.md)——上游来源与版本锁定、本地补丁层、运行时环境与核心边界（[English](docs/architecture.md)）
-- [目录结构与任务 YAML 参考](docs/tasks-and-layout_CN.md)——完整目录树、任务字段与默认值全集（[English](docs/tasks-and-layout.md)）
-- [执行流程、定时运行与数据 / run.json](docs/workflow-and-data_CN.md)——九步流水线、Hermes cron 注册、预检失败记录、数据清理/迁移、Gmail 投递语义（[English](docs/workflow-and-data.md)）
+- [项目深入说明](docs/DEEP-DIVE_CN.md)——上游来源与版本锁定、本地补丁层、完整目录树、九步执行流程、数据 / run.json 语义、数据清理与 Gmail 投递细节（[English](docs/DEEP-DIVE.md)）
 
 Skill 内部参考：
 

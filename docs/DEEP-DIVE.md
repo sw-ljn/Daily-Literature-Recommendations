@@ -1,6 +1,66 @@
-# Execution workflow, scheduling details, and data/run.json
+# Project deep dive: architecture, layout, workflow, and data
 
-> This document expands on the README: the stage-by-stage execution workflow, the Hermes cron walkthrough, and the full data/`run.json` contract. For the reading path, start at [README.md](README.md).
+**English** | [简体中文](DEEP-DIVE_CN.md)
+
+> This document consolidates the project's deep-dive documentation in one place. For the quick-start reading path, start at [README.md](../README.md).
+
+## Upstream projects and local orchestration
+
+| Component | Upstream | Pinned version | Role in this project |
+| --- | --- | --- | --- |
+| `write-literature-review` | [Zsun79/LitReviewSkill](https://github.com/Zsun79/LitReviewSkill) | commit [`a53cd419352e4dd05958f67340fde3642d84abc3`](https://github.com/Zsun79/LitReviewSkill/tree/a53cd419352e4dd05958f67340fde3642d84abc3) | Reuses stages 0–7: scope, queries, seed discovery, citation expansion, screening, ranking, and bounded full-text inspection. Its knowledge-graph and review-writing stages are intentionally omitted. |
+| `paper-search-cli` | [dr-dumpling/paper-search-cli](https://github.com/dr-dumpling/paper-search-cli) | npm `0.3.4`, MIT | Multi-source metadata search, identifier verification, backward/forward citation expansion, lawful PDF discovery, and journal metrics. |
+| `daily-literature-recommendations` | Project-local skill | `1.0.0` | Orchestrates the upstream workflows and adds native Gmail delivery, label verification, task-local history, and run-artifact management. |
+
+Source provenance and versions are recorded in `skills-lock.json`, `package.json`, and `package-lock.json`. The scheduler (the triggering platform's built-in scheduler) and the Gmail account are runtime dependencies; they are not vendored upstream repositories.
+
+The project does not fork the upstream skills. After `npm install`, `scripts/patch-paper-search.mjs` applies a small compatibility layer to the pinned `paper-search-cli 0.3.4` runtime:
+
+- a sufficient source-specific timeout for arXiv, without holding the global lock during cooldown waits;
+- the managed SerpApi backend when Google Scholar is configured;
+- a verified caller-provided `pdfUrl` as the first lawful download candidate.
+
+## Repository layout
+
+```text
+daily-literature-recommendations/
+├─ .agents/skills/
+│  ├─ daily-literature-recommendations/  # Project orchestration skill
+│  │  ├─ scripts/gmail_delivery.py       # Native Gmail REST delivery: send, label, verify
+│  │  ├─ scripts/history.py              # Recommendation-history reader/writer
+│  │  ├─ scripts/normalize_papers.py     # Normalized paper-record helpers
+│  │  └─ references/                     # Email template, contracts, delivery CLI, config schema
+│  ├─ paper-search/                      # CLI routing skill (bundled from paper-search-cli)
+│  └─ write-literature-review/           # Pinned LitReviewSkill
+├─ .claude/skills/                       # Generated junctions into .agents/skills (Git-ignored; rebuilt by npm run sync:skills)
+├─ tasks/
+│  ├─ _template.yaml                                  # Fully documented production template
+│  ├─ smoke-mattergen.yaml                            # MatterGen end-to-end smoke task
+│  └─ structure-action-property-applications.yaml     # Production example task
+├─ data/                                 # Runtime data; ignored by Git
+│  └─ <task_id>/
+│     ├─ runs/<timestamp>/               # Search, screening, reading, and run.json
+│     ├─ downloads/<timestamp>/          # Lawfully acquired, identity-checked papers
+│     ├─ state/recommendations.jsonl     # Delivered-paper history for this task
+│     └─ tmp/                            # Task-local temporary files
+├─ scripts/
+│  ├─ patch-paper-search.mjs             # Local paper-search compatibility patch
+│  ├─ sync-claude-skills.mjs             # Mirror .agents/skills into .claude/skills for Claude Code
+│  ├─ cleanup-task-data.py               # Delete one canonical task-data directory
+│  ├─ migrate-task-data.py               # One-time legacy-layout migration
+│  ├─ write-preflight-failure.py         # Canonical delivery-preflight failure writer
+│  └─ task_data_layout.py                # Shared path and safety implementation
+├─ tests/                                # Patch, sync, history, delivery, migration, and cleanup tests
+├─ docs/                                 # This documentation set
+├─ .env.example                          # Secret-free environment template
+├─ package.json                          # Local commands and pinned npm dependency
+├─ pyproject.toml / uv.lock              # Pinned Python environment (pypdf)
+├─ skills-lock.json                      # Skill source and commit provenance
+├─ README.md / README_CN.md              # Entry documentation (English / 简体中文)
+└─ IDEA.md                               # Private notes (Git-ignored)
+```
+
+The four runtime subdirectories are fixed and isolated per `task_id`. Task YAML cannot override runtime paths.
 
 ## Execution workflow
 
@@ -19,38 +79,6 @@ A normal invocation performs these stages:
 Inaccessible full text is not evidence that a paper is irrelevant. Record an isolated source, download, or candidate failure and continue other independent candidates.
 
 There is no equivalent `npm run recommend` command — the skill provides the orchestration; the CLIs, Python state scripts, and file operations are project-local implementation steps within the orchestrated run.
-
-## Scheduling the run with Hermes cron
-
-Register one cron job per task with the built-in scheduler, pinned to the project directory so every run starts from the right working directory:
-
-```bash
-hermes cron create "0 8 * * *" \
-  "Run the project's daily literature recommendation task." \
-  --name daily-literature \
-  --workdir /path/to/Daily-Literature-Recommendations \
-  --deliver local
-```
-
-`--workdir` injects the project context files and sets the working directory for terminal, file, and code-execution tools; `--deliver local` keeps the run out of chat. `0 8 * * *` means 08:00 daily in the host timezone. Inspect, pause, or remove jobs with `hermes cron list`, `hermes cron pause`, `hermes cron resume`, and `hermes cron delete`.
-
-The job prompt itself stays small:
-
-```text
-First validate the Gmail credential without sending email: run `python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py auth-check --live` from the project root.
-
-If the project directory is unavailable, stop immediately and state that a local run.json could not be written. Do not use a cloud shell and do not claim that a file was written.
-
-If the credential check fails while the project directory remains usable, run this command from the project root and no other path:
-python scripts/write-preflight-failure.py --task-file tasks/<task>.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<actual-error-code>" --runtime-status ok --gmail-status unavailable
-Confirm that the returned run_path is under data/<task_id>/runs/<timestamp>/run.json, then stop. Never hand-create runs/<task_id>/... or another legacy path.
-
-When the check passes, use the project's $daily-literature-recommendations skill to run tasks/<task>.yaml. Keep every project command and file operation local; do not use a cloud shell. Use Gmail only for sending, exact-label application, and read-back verification.
-```
-
-Connection preflight must happen before retrieval and delivery. `write-preflight-failure.py` must create the failure record; the model must not construct the path itself. The script reads the authoritative `task_id` and `timezone`, writes atomically to the canonical directory, and refuses to overwrite an existing run. It fixes path consistency only; it does not repair a missing, expired, or revoked Gmail credential.
-
-Do not change cadence from inside the skill. Every scheduled trigger sends one report, including zero-result runs. Do not search prior Gmail subjects to suppress a valid invocation.
 
 ## Data and `run.json`
 
@@ -98,20 +126,6 @@ Minimal delivery-credential preflight failure state:
 
 Recommendation history is stored at `data/<task_id>/state/recommendations.jsonl`. It may contain rows for that task only; the history tool rejects cross-task rows to prevent contamination.
 
-## Preflight failure recording
-
-`write-preflight-failure.py` derives the canonical run path from the task YAML and writes the failure record there; the returned `run_path` is the only allowed location for that record:
-
-```bash
-npm run failure:preflight -- \
-  --task-file tasks/smoke-mattergen.yaml \
-  --stage gmail_auth \
-  --reason "Gmail credential preflight failed" \
-  --error-code "FORBIDDEN" \
-  --runtime-status ok \
-  --gmail-status unavailable
-```
-
 ### Clean data by `task_id`
 
 The cleanup script handles exactly one `data/<task_id>` directory. It defaults to dry-run and never scans other tasks:
@@ -133,20 +147,6 @@ npm run cleanup:task -- --task-id $taskId --remove-task-config --apply
 ```
 
 Add `--json` for a machine-readable report. The script rejects path separators, `..`, project roots, and unsafe targets. `task-a` never matches `task-a-longer`.
-
-### Migrate the legacy scattered layout
-
-Older installations used root-level `runs/<task_id>`, `downloads/<task_id>`, shared `state/recommendations.jsonl`, and task-prefixed temporary paths. Only legacy installations need this one-time migration:
-
-```bash
-# Preview
-npm run migrate:task -- --task-id $taskId
-
-# Pause the corresponding scheduled task, then apply
-npm run migrate:task -- --task-id $taskId --apply
-```
-
-The migrator copies data into a staging directory and verifies file count and byte count before committing `data/<task_id>`, splitting shared history, and removing exact legacy sources. It refuses to merge into an existing destination. See `docs/task-data-cleanup.md` for details.
 
 ## Gmail delivery semantics
 
