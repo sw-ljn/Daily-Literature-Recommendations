@@ -6,7 +6,6 @@
 
 - 每次触发都是一次独立运行，即使没有新论文也会发送一封状态邮件
 - 论文按 DOI / arXiv ID / 规范化题名去重，已推荐过的不会重复出现
-- 不使用 Sci-Hub；无法合法获得全文时如实标记 `abstract_only`
 
 ## 快速开始
 
@@ -36,7 +35,7 @@ uv run python .agents/skills/daily-literature-recommendations/scripts/gmail_deli
 **手动触发**——在项目根目录的 agent 会话中：
 
 ```text
-使用项目的 $daily-literature-recommendations 执行 tasks/smoke-mattergen.yaml。严格遵守 YAML 的检索、阅读和推荐上限；不得使用 Sci-Hub；完成 Gmail 发送、精确标签应用、回读验证和历史更新。
+使用项目的 $daily-literature-recommendations 执行 tasks/smoke-mattergen.yaml。严格遵守 YAML 的检索、阅读和推荐上限；完成 Gmail 发送、精确标签应用、回读验证和历史更新。
 ```
 
 **定时触发**：见[多平台调度](#多平台调度)——每个平台用自己的调度器注册，工作流本身不变。Skill 负责完整编排，因此没有等价的 `npm run recommend` 命令。
@@ -109,7 +108,7 @@ python .agents/skills/daily-literature-recommendations/scripts/gmail_delivery.py
 项目目录不可用则立即停止并如实说明。预检失败时，在项目根目录执行
 python scripts/write-preflight-failure.py --task-file tasks/<任务>.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<实际错误码>" --runtime-status ok --gmail-status unavailable
 确认返回的 run_path 位于 data/<task_id>/runs/<时间戳>/run.json 后停止。
-预检通过后，用项目的 daily-literature-recommendations 技能执行 tasks/<任务>.yaml，严格遵守全部上限，完成 Gmail 发送、精确标签应用、回读验证和历史更新。不使用 Sci-Hub。
+预检通过后，用项目的 daily-literature-recommendations 技能执行 tasks/<任务>.yaml，严格遵守全部上限，完成 Gmail 发送、精确标签应用、回读验证和历史更新。全文获取来源约束（如是否允许 Sci-Hub）由使用者在提示词或任务 YAML 中自行声明。
 ```
 
 注意：每个任务只在一个调度器注册一条定时项（重复注册会重复发邮件）；Gmail OAuth token 位于 Hermes 数据目录（本机 `%LOCALAPPDATA%\hermes\google_token.json`），`gmail_delivery.py` 自动定位，其他平台无需复制凭据。
@@ -145,6 +144,6 @@ python scripts/write-preflight-failure.py --task-file tasks/<任务>.yaml --stag
 ## 安全与维护
 
 - 秘密只存于本地 `.env` / 环境变量 / `paper-search` 配置；`data/`、`node_modules/`、私有任务 YAML 均被 Git 忽略。
-- 下载只用合法来源（出版商、arXiv、PMC、CORE、Unpaywall），不用 Sci-Hub；PDF 下载后需核验题名与身份。
+- 下载来源合规策略由使用者定义（写入提示词或任务 YAML）；无论来源如何，PDF 下载后都需核验题名与身份，无法获得全文时如实标记 `abstract_only`。
 - 清理、迁移或升级依赖前先暂停对应调度任务，完成后跑 `npm test` 与 `npm run doctor`。
 - 文档与实际 CLI 冲突时，以 `npx --no-install paper-search --help` 和测试结果为准。

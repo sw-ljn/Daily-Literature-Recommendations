@@ -6,7 +6,6 @@ A bounded literature-recommendation project driven by a scheduled agent run. A t
 
 - Every trigger is an independent run and sends one status email, even with zero new papers.
 - Papers are deduplicated by DOI, arXiv ID, or normalized title; delivered papers never repeat.
-- No Sci-Hub; unattainable full text is honestly recorded as `abstract_only`, never faked.
 
 ## Quick start
 
@@ -32,7 +31,7 @@ API keys for search providers go only in `.env` (see `.env.example`).
 **Manual** — from the project root in any supported agent session:
 
 ```text
-Use the project's $daily-literature-recommendations skill to run tasks/smoke-mattergen.yaml. Follow every YAML search, reading, and recommendation limit. Do not use Sci-Hub. Complete Gmail delivery, exact-label application, read-back verification, and history update.
+Use the project's $daily-literature-recommendations skill to run tasks/smoke-mattergen.yaml. Follow every YAML search, reading, and recommendation limit. Complete Gmail delivery, exact-label application, read-back verification, and history update.
 ```
 
 There is no `npm run recommend` — the skill orchestrates the run; the CLIs and scripts below are its internal steps.
@@ -107,7 +106,7 @@ If the preflight fails while the project directory is usable, run from the proje
 python scripts/write-preflight-failure.py --task-file tasks/<task>.yaml --stage gmail_auth --reason "Gmail credential preflight failed" --error-code "<actual-error-code>" --runtime-status ok --gmail-status unavailable
 Confirm the returned run_path is under data/<task_id>/runs/<timestamp>/run.json, then stop.
 
-When the check passes, use the project's daily-literature-recommendations skill to run tasks/<task>.yaml: honor every YAML limit and complete Gmail delivery, exact-label application, read-back verification, and the history update. Never use Sci-Hub.
+When the check passes, use the project's daily-literature-recommendations skill to run tasks/<task>.yaml: honor every YAML limit and complete Gmail delivery, exact-label application, read-back verification, and the history update. Download-source policy (e.g. whether Sci-Hub is allowed) is declared by the user in the prompt or task YAML.
 ```
 
 For Claude Code, trigger it from Windows Task Scheduler with `claude -p "<task prompt>"` (complete an interactive `claude` login once first). Codex uses the same prompt in an automation or `codex exec --full-auto`.
@@ -144,7 +143,7 @@ For Claude Code, trigger it from Windows Task Scheduler with `claude -p "<task p
 ## Security and maintenance
 
 - Secrets live only in `.env`, `paper-search` configuration, or environment variables — never in task YAML, skills, run artifacts, or Git history.
-- Downloads only from lawful sources (publishers, arXiv, PMC/Europe PMC, CORE/OpenAIRE, Unpaywall); verify title and identity after every PDF download.
+- Download-source policy (including whether Sci-Hub may be used) is the user's decision, declared in the task prompt or task YAML; verify title and identity after every PDF download.
 - Never describe abstract-only assessment as full-text reading; never fabricate bibliographic data, results, or limitations.
 - Pause the schedule before cleanup, migration, or dependency upgrades; run `npm test` and `npm run doctor` afterward.
 - If docs and the runtime CLI disagree, trust `npx --no-install paper-search --help` and the tests.

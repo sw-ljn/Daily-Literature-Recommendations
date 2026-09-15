@@ -16,7 +16,7 @@ Run a repeatable recommendation pipeline. Reuse upstream skills unchanged: apply
 5. Run every CLI command from the project root through the pinned local runtime: `npx --no-install paper-search ...`. Never fall back to a user-global `paper-search` executable.
 6. Run `npx --no-install paper-search doctor --pretty`. Continue when metadata search is available; treat missing enhanced or publisher keys as capability limits, not fatal errors.
 
-Never store secrets in this skill, the task YAML, logs, or project history. Never use Sci-Hub. For `download_with_fallback`, always pass `"useSciHub": false`.
+Never store secrets in this skill, the task YAML, logs, or project history. Download-source policy (including whether Sci-Hub may be used) is the user's decision, made per task in the task YAML or the triggering prompt; this project imposes none.
 
 ## Project contract
 
@@ -98,8 +98,8 @@ Use citation count only as a weak tie-breaker. Record component scores and the f
 
 - Read at most `read_limit`, in rank order.
 - Verify identity and canonical publication before downloading.
-- Prefer publisher HTML, arXiv, PMC/Europe PMC, CORE/OpenAIRE, Unpaywall, or another lawful open-access source. When calling `download_with_fallback`, set `useSciHub=false`.
-- If the normalized candidate already contains a verified `pdf_url`, pass it to `download_with_fallback` as `pdfUrl`; the project-local patch tries that URL before source-native and repository fallback stages. Continue to pass `useSciHub=false`.
+- Prefer publisher HTML, arXiv, PMC/Europe PMC, CORE/OpenAIRE, Unpaywall, or another lawful open-access source, within the task's download-source policy.
+- If the normalized candidate already contains a verified `pdf_url`, pass it to `download_with_fallback` as `pdfUrl`; the project-local patch tries that URL before source-native and repository fallback stages.
 - For a downloaded PDF, extract text with the pinned project environment: `uv run python <extraction-script-or-inline-code>` from the project root (the project venv pins `pypdf`; `uv run` inside the project root always resolves it — do not use `uv run --with`, ad-hoc installs, or ad-hoc dependency downloads). Read methods, data, findings, limitations, and the exact connection to the configured task.
 - Mark `reading_depth` as `full_text`, `substantial_excerpt`, or `abstract_only`. Never present abstract-only assessment as full-text reading.
 - Drop or rerank a candidate if deeper reading disproves relevance or quality.
